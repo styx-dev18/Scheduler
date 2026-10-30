@@ -39,6 +39,44 @@ RSpec.describe Appointment do
     expect(appointment).not_to be_valid
   end
 
+  describe ".build_confirmed" do
+    let(:dealership) { create(:dealership) }
+    let(:customer) { create(:customer) }
+    let(:attrs) do
+      {
+        dealership:,
+        customer:,
+        vehicle: create(:vehicle, customer:),
+        technician: create(:technician, dealership:),
+        service_bay: create(:service_bay, dealership:),
+        service_type: create(:service_type),
+        start_at: Time.utc(2030, 1, 7, 9),
+        end_at: Time.utc(2030, 1, 7, 10)
+      }
+    end
+
+    it "AC1 returns an unsaved confirmed appointment" do
+      built = described_class.build_confirmed(**attrs)
+
+      expect(built).to be_new_record
+      expect(built).to be_confirmed
+      expect(built).to be_valid
+    end
+
+    it "AC1 overrides a status passed in the attributes" do
+      expect(described_class.build_confirmed(**attrs, status: "cancelled")).to be_confirmed
+    end
+
+    it "AC1 is invalid and unsaved with a technician from another dealership" do
+      built = described_class.build_confirmed(**attrs, technician: create(:technician))
+
+      expect(built).not_to be_valid
+      expect(built.errors[:technician]).to be_present
+      expect(built).to be_new_record
+      expect(described_class.count).to eq(0)
+    end
+  end
+
   describe "database" do
     let(:saved) { create(:appointment) }
 
