@@ -17,7 +17,9 @@ module ErrorCatalogue
     "NO_TECHNICIAN" => Entry.new(code: "NO_TECHNICIAN", status: 409, title: "No technician available"),
     "NO_CAPACITY" => Entry.new(code: "NO_CAPACITY", status: 409, title: "No capacity available"),
     "IDEMPOTENCY_KEY_REUSED" => Entry.new(code: "IDEMPOTENCY_KEY_REUSED", status: 422, title: "Idempotency key reused"),
-    "IDEMPOTENCY_KEY_IN_PROGRESS" => Entry.new(code: "IDEMPOTENCY_KEY_IN_PROGRESS", status: 409, title: "Idempotency key in progress")
+    "IDEMPOTENCY_KEY_IN_PROGRESS" => Entry.new(code: "IDEMPOTENCY_KEY_IN_PROGRESS", status: 409, title: "Idempotency key in progress"),
+    "INVALID_STATUS_TRANSITION" => Entry.new(code: "INVALID_STATUS_TRANSITION", status: 409, title: "Invalid status transition"),
+    "CANCELLATION_WINDOW_CLOSED" => Entry.new(code: "CANCELLATION_WINDOW_CLOSED", status: 422, title: "Cancellation window closed")
   }.freeze
 
   def self.fetch(code)

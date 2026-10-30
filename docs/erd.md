@@ -22,6 +22,7 @@ erDiagram
   customers ||--o{ appointments : books
   vehicles ||--o{ appointments : serviced_in
   appointments ||--o{ appointment_status_histories : records
+  appointments ||--o{ appointment_reschedules : rescheduled_by
   appointments ||--o{ idempotency_keys : created_by
 
   dealerships {
@@ -127,6 +128,8 @@ erDiagram
     string status
     int lock_version
     tstzrange time_range
+    timestamptz cancelled_at
+    text cancellation_reason
   }
   appointment_status_histories {
     uuid id PK
@@ -134,6 +137,17 @@ erDiagram
     string from_status
     string to_status
     timestamptz changed_at
+    string actor
+  }
+  appointment_reschedules {
+    uuid id PK
+    uuid appointment_id FK
+    timestamptz prev_start_at
+    timestamptz prev_end_at
+    timestamptz new_start_at
+    timestamptz new_end_at
+    string actor
+    string request_id
   }
   idempotency_keys {
     uuid id PK

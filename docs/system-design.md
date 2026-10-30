@@ -58,6 +58,47 @@ In production, use the managed database's automated backups and point-in-time re
 
 `scripts/persistence_check.sh` needs only `docker compose` and `curl`. It starts the stack, books an appointment through the API, then checks that `GET /api/v1/appointments/{id}` returns 200 after creation, a `web` restart, a `db` restart and `docker compose down` followed by `up`. It prints one line per step and exits 1 naming the failed step. Run it manually; it is not part of `verify.sh` or CI.
 
+## Appointment lifecycle and domain events
+Status transitions live in the pure-Ruby `Scheduling::StatusMachine`; `Appointment#start!`, `#complete!`, `#mark_no_show!` and `#cancel!` delegate to it and raise `InvalidTransition` for a move the table doesn't allow.
+
+| From | Allowed to |
+|---|---|
+| `confirmed` | `in_progress`, `cancelled`, `no_show` |
+| `in_progress` | `completed` |
+| `completed`, `cancelled`, `no_show` | none |
+
+- `no_show` is accepted only at or after `start_at`, using the injected `Clock`.
+- Every transition writes an `appointment_status_histories` row with `from_status`, `to_status`, `changed_at` and `actor`.
+
+### Locking
+Cancel, reschedule and status change start with `appointment.lock!` (`SELECT ... FOR UPDATE`), so concurrent lifecycle calls on one appointment serialize on the row and the final state matches one of the two orders. `lock_version` stays as optimistic locking; a reschedule request that sends a stale `lock_version` gets `409 CONCURRENT_MODIFICATION`.
+
+### Reschedule
+- The pipeline (past and slot-grid checks, opening hours, vehicle conflict, availability, assignment, savepoint retry) is shared with booking through `Appointments::Placement`.
+- The appointment row is updated in place, so its id is kept and the exclusion constraints compare the new interval only against other rows.
+- The availability queries and the vehicle conflict check take `exclude_appointment_id`, so a 15-minute shift is not blocked by the appointment's own old interval.
+- The current bay and technician are kept when both are free at the new time; otherwise the assignment strategy picks.
+- The previous and new intervals, actor and request id go to `appointment_reschedules`. A failed reschedule writes nothing.
+
+### Cancel
+Cancel sets `cancelled`, `cancelled_at` and `cancellation_reason` and writes the history row in one transaction. Cancelled appointments leave the `confirmed`/`in_progress` exclusion constraints, so the bay, technician and vehicle are free at once. A repeat cancel returns the current state without a new history row or event. `CANCELLATION_CUTOFF_HOURS` (default `0`, off) blocks cancelling closer to the start than the cut-off with `422 CANCELLATION_WINDOW_CLOSED`.
+
+### Domain events
+`Appointments::Events.publish` publishes through `ActiveSupport::Notifications` after the outermost transaction commits (`ActiveRecord.after_all_transactions_commit`), so a rollback, a failure or an idempotent repeat publishes nothing.
+
+| Event | Extra payload |
+|---|---|
+| `appointment.confirmed` | none |
+| `appointment.rescheduled` | `previous_start_at`, `previous_end_at`, `technician_id`, `service_bay_id` |
+| `appointment.cancelled` | `cancelled_at`, `reason` |
+| `appointment.status_changed` | `from_status`, `to_status` |
+
+Every payload carries `appointment_id`, `customer_id`, `dealership_id`, `status`, `start_at`, `end_at`, `occurred_at` (UTC, from the injected clock) and `request_id` (`Current.request_id`, set per request from `X-Request-Id`).
+
+`config/initializers/event_subscribers.rb` subscribes to `/\Aappointment\./` and writes one JSON line per event to `Rails.logger`.
+
+### Outbox (production path)
+In-process notifications are lost if the process dies between commit and publish. For at-least-once delivery, write an `outbox_events` row (event name, JSON payload, `published_at`) in the same transaction as the appointment change, then relay unpublished rows with a Solid Queue job that marks them published after delivery. Consumers dedupe on the event id. This is documented only; it is not implemented.
 
 ## Future steps
 - Partition `appointments` by `start_at` (monthly range partitions) once history grows past what one table serves; exclusion constraints need the partition key in the constraint, so the constraints must be re-expressed per partition.

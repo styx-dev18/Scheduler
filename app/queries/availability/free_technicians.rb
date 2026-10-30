@@ -2,10 +2,11 @@ module Availability
   class FreeTechnicians
     TIME_FORMAT = "%H:%M:%S".freeze
 
-    def initialize(dealership:, service_type:, interval:)
+    def initialize(dealership:, service_type:, interval:, exclude_appointment_id: nil)
       @dealership = dealership
       @service_type = service_type
       @interval = interval
+      @exclude_appointment_id = exclude_appointment_id
     end
 
     def call
@@ -17,7 +18,7 @@ module Availability
         .where(active: true)
         .where(id: covering_shifts(local_start, local_end).select(:technician_id))
         .where.not(id: TechnicianTimeOff.where("start_at < ? AND end_at > ?", @interval.ends_at, @interval.starts_at).select(:technician_id))
-        .where.not(id: Appointment.active.overlapping(@interval).select(:technician_id))
+        .where.not(id: Appointment.active.overlapping(@interval).where.not(id: @exclude_appointment_id).select(:technician_id))
       scope = scope.where(id: qualified) if @service_type.required_qualification_id.present?
       scope.distinct.order(:id)
     end

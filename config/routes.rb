@@ -13,7 +13,13 @@ Rails.application.routes.draw do
         resources :appointments, only: :index, controller: "dealership_appointments"
       end
       resources :service_types, path: "service-types", only: :index
-      resources :appointments, only: %i[create show index]
+      resources :appointments, only: %i[create show index] do
+        member do
+          post :cancel
+          post :reschedule
+          patch :status, action: :update_status
+        end
+      end
       get "availability", to: "availability#index"
     end
   end
