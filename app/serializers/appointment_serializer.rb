@@ -23,6 +23,12 @@ class AppointmentSerializer
     appointment.end_at.in_time_zone(appointment.dealership.time_zone).iso8601
   end
 
+  attributes :lock_version, :cancellation_reason
+
+  attribute :cancelled_at do |appointment|
+    appointment.cancelled_at&.utc&.iso8601
+  end
+
   attribute :customer do |appointment|
     { id: appointment.customer.id, name: appointment.customer.name }
   end

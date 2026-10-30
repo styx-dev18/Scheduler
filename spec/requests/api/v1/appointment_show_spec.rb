@@ -13,7 +13,7 @@ RSpec.describe "GET /api/v1/appointments/:id" do
     aggregate_failures do
       expect(body["success"]).to be(true)
       expect(data.keys).to match_array(%w[id status customer_id vehicle_id service_type_id dealership_id technician_id
-                                          service_bay_id start_at end_at local_start_at local_end_at time_zone customer
+                                          service_bay_id start_at end_at local_start_at local_end_at time_zone lock_version cancelled_at cancellation_reason customer
                                           vehicle service_type dealership technician service_bay])
       expect(data["id"]).to eq(appointment.id)
       expect(data["customer"]).to eq({ "id" => appointment.customer.id, "name" => appointment.customer.name })

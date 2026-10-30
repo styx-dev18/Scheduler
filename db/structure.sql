@@ -28,6 +28,26 @@ SET default_tablespace = '';
 SET default_table_access_method = heap;
 
 --
+-- Name: appointment_reschedules; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.appointment_reschedules (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    appointment_id uuid NOT NULL,
+    prev_start_at timestamp with time zone NOT NULL,
+    prev_end_at timestamp with time zone NOT NULL,
+    new_start_at timestamp with time zone NOT NULL,
+    new_end_at timestamp with time zone NOT NULL,
+    actor character varying,
+    request_id character varying,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL,
+    CONSTRAINT appointment_reschedules_new_end_after_start_check CHECK ((new_end_at > new_start_at)),
+    CONSTRAINT appointment_reschedules_prev_end_after_start_check CHECK ((prev_end_at > prev_start_at))
+);
+
+
+--
 -- Name: appointment_status_histories; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -38,7 +58,8 @@ CREATE TABLE public.appointment_status_histories (
     to_status character varying NOT NULL,
     changed_at timestamp with time zone NOT NULL,
     created_at timestamp(6) without time zone NOT NULL,
-    updated_at timestamp(6) without time zone NOT NULL
+    updated_at timestamp(6) without time zone NOT NULL,
+    actor character varying
 );
 
 
@@ -61,6 +82,8 @@ CREATE TABLE public.appointments (
     time_range tstzrange GENERATED ALWAYS AS (tstzrange(start_at, end_at, '[)'::text)) STORED,
     created_at timestamp(6) without time zone NOT NULL,
     updated_at timestamp(6) without time zone NOT NULL,
+    cancelled_at timestamp with time zone,
+    cancellation_reason text,
     CONSTRAINT appointments_end_after_start_check CHECK ((end_at > start_at)),
     CONSTRAINT appointments_status_check CHECK (((status)::text = ANY ((ARRAY['confirmed'::character varying, 'in_progress'::character varying, 'completed'::character varying, 'cancelled'::character varying, 'no_show'::character varying])::text[])))
 );
@@ -315,6 +338,14 @@ CREATE TABLE public.vehicles (
 
 
 --
+-- Name: appointment_reschedules appointment_reschedules_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.appointment_reschedules
+    ADD CONSTRAINT appointment_reschedules_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: appointment_status_histories appointment_status_histories_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -509,6 +540,13 @@ CREATE UNIQUE INDEX idx_on_dealership_id_service_type_id_f99dfbb88b ON public.de
 --
 
 CREATE UNIQUE INDEX idx_on_technician_id_qualification_id_3c8d696923 ON public.technician_qualifications USING btree (technician_id, qualification_id);
+
+
+--
+-- Name: index_appointment_reschedules_on_appointment_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_appointment_reschedules_on_appointment_id ON public.appointment_reschedules USING btree (appointment_id);
 
 
 --
@@ -843,6 +881,14 @@ ALTER TABLE ONLY public.appointments
 
 
 --
+-- Name: appointment_reschedules fk_rails_c3e326cb65; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.appointment_reschedules
+    ADD CONSTRAINT fk_rails_c3e326cb65 FOREIGN KEY (appointment_id) REFERENCES public.appointments(id);
+
+
+--
 -- Name: technician_qualifications fk_rails_c99d8685a1; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -889,6 +935,7 @@ ALTER TABLE ONLY public.dealership_service_types
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20261030000001'),
 ('20260301000001'),
 ('20260201000002'),
 ('20260201000001'),

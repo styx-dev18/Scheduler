@@ -4,6 +4,406 @@ info:
   title: Unified Service Scheduler API
   version: v1
 paths:
+  "/api/v1/appointments/{id}/cancel":
+    post:
+      summary: Cancel an appointment
+      tags:
+      - Appointments
+      parameters:
+      - name: id
+        in: path
+        format: uuid
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: AC1 appointment cancelled
+          content:
+            application/json:
+              examples:
+                cancelled:
+                  value:
+                    success: true
+                    data:
+                      id: 6f1c2a3e-8d4b-4e5f-9a60-1b2c3d4e5f60
+                      status: cancelled
+                      start_at: '2030-01-07T09:00:00Z'
+                      end_at: '2030-01-07T10:00:00Z'
+                      lock_version: 1
+                      cancelled_at: '2030-01-01T00:00:00Z'
+                      cancellation_reason: Change of plans
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      status:
+                        type: string
+                        enum:
+                        - confirmed
+                        - in_progress
+                        - completed
+                        - cancelled
+                        - no_show
+                      start_at:
+                        type: string
+                        format: date-time
+                      end_at:
+                        type: string
+                        format: date-time
+                      lock_version:
+                        type: integer
+                      cancelled_at:
+                        type: string
+                        format: date-time
+                        nullable: true
+                      cancellation_reason:
+                        type: string
+                        nullable: true
+                    required:
+                    - id
+                    - status
+                    - lock_version
+                required:
+                - success
+                - data
+        '400':
+          description: EC2 malformed id
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  error:
+                    "$ref": "#/components/schemas/Error"
+                required:
+                - success
+                - error
+        '404':
+          description: EC2 unknown id
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  error:
+                    "$ref": "#/components/schemas/Error"
+                required:
+                - success
+                - error
+        '409':
+          description: EC1 appointment can no longer be cancelled
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  error:
+                    "$ref": "#/components/schemas/Error"
+                required:
+                - success
+                - error
+        '422':
+          description: EC4 cancellation window closed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  error:
+                    "$ref": "#/components/schemas/Error"
+                required:
+                - success
+                - error
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  maxLength: 500
+  "/api/v1/appointments/{id}/reschedule":
+    post:
+      summary: Reschedule a confirmed appointment
+      tags:
+      - Appointments
+      parameters:
+      - name: id
+        in: path
+        format: uuid
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: AC4 appointment rescheduled
+          content:
+            application/json:
+              examples:
+                rescheduled:
+                  value:
+                    success: true
+                    data:
+                      id: 6f1c2a3e-8d4b-4e5f-9a60-1b2c3d4e5f60
+                      status: confirmed
+                      start_at: '2030-01-08T11:00:00Z'
+                      end_at: '2030-01-08T12:00:00Z'
+                      lock_version: 1
+                      cancelled_at:
+                      cancellation_reason:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      status:
+                        type: string
+                        enum:
+                        - confirmed
+                        - in_progress
+                        - completed
+                        - cancelled
+                        - no_show
+                      start_at:
+                        type: string
+                        format: date-time
+                      end_at:
+                        type: string
+                        format: date-time
+                      lock_version:
+                        type: integer
+                      cancelled_at:
+                        type: string
+                        format: date-time
+                        nullable: true
+                      cancellation_reason:
+                        type: string
+                        nullable: true
+                    required:
+                    - id
+                    - status
+                    - lock_version
+                required:
+                - success
+                - data
+        '400':
+          description: EC5 invalid request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  error:
+                    "$ref": "#/components/schemas/Error"
+                required:
+                - success
+                - error
+        '404':
+          description: EC2 unknown id
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  error:
+                    "$ref": "#/components/schemas/Error"
+                required:
+                - success
+                - error
+        '409':
+          description: EC7 stale lock_version
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  error:
+                    "$ref": "#/components/schemas/Error"
+                required:
+                - success
+                - error
+        '422':
+          description: EC5 start time in the past
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  error:
+                    "$ref": "#/components/schemas/Error"
+                required:
+                - success
+                - error
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                new_start_at:
+                  type: string
+                  format: date-time
+                lock_version:
+                  type: integer
+              required:
+              - new_start_at
+  "/api/v1/appointments/{id}/status":
+    patch:
+      summary: Move an appointment through the workshop statuses
+      tags:
+      - Appointments
+      parameters:
+      - name: id
+        in: path
+        format: uuid
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: AC8 status changed
+          content:
+            application/json:
+              examples:
+                in_progress:
+                  value:
+                    success: true
+                    data:
+                      id: 6f1c2a3e-8d4b-4e5f-9a60-1b2c3d4e5f60
+                      status: in_progress
+                      start_at: '2030-01-07T09:00:00Z'
+                      end_at: '2030-01-07T10:00:00Z'
+                      lock_version: 1
+                      cancelled_at:
+                      cancellation_reason:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      status:
+                        type: string
+                        enum:
+                        - confirmed
+                        - in_progress
+                        - completed
+                        - cancelled
+                        - no_show
+                      start_at:
+                        type: string
+                        format: date-time
+                      end_at:
+                        type: string
+                        format: date-time
+                      lock_version:
+                        type: integer
+                      cancelled_at:
+                        type: string
+                        format: date-time
+                        nullable: true
+                      cancellation_reason:
+                        type: string
+                        nullable: true
+                    required:
+                    - id
+                    - status
+                    - lock_version
+                required:
+                - success
+                - data
+        '400':
+          description: EC12 unsupported status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  error:
+                    "$ref": "#/components/schemas/Error"
+                required:
+                - success
+                - error
+        '404':
+          description: EC12 unknown id
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  error:
+                    "$ref": "#/components/schemas/Error"
+                required:
+                - success
+                - error
+        '409':
+          description: EC11 invalid transition
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  error:
+                    "$ref": "#/components/schemas/Error"
+                required:
+                - success
+                - error
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum:
+                  - in_progress
+                  - completed
+                  - no_show
+              required:
+              - status
   "/api/v1/appointments":
     post:
       summary: Book an appointment

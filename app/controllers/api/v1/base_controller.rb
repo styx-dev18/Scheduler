@@ -4,6 +4,8 @@ module Api
       include Envelope
       include Pagy::Backend
 
+      before_action { Current.request_id = request.request_id }
+
       rescue_from StandardError do |error|
         Rails.logger.error("#{error.class}: #{error.message}")
         render_failure("INTERNAL_ERROR", detail: "An unexpected error occurred")

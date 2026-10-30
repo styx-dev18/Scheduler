@@ -37,7 +37,7 @@ RSpec.describe "POST /api/v1/appointments confirmation" do
     data = body["data"]
     aggregate_failures do
       expect(data.keys).to match_array(%w[id status customer_id vehicle_id service_type_id dealership_id technician_id
-                                          service_bay_id start_at end_at local_start_at local_end_at time_zone customer
+                                          service_bay_id start_at end_at local_start_at local_end_at time_zone lock_version cancelled_at cancellation_reason customer
                                           vehicle service_type dealership technician service_bay])
       expect(data["status"]).to eq("confirmed")
       expect(data["customer"]).to eq({ "id" => customer.id, "name" => customer.name })
