@@ -1,0 +1,14 @@
+services:
+  web:
+    build:
+      context: .
+      args:
+        BUNDLE_WITHOUT: "test"
+    ports:
+      - "3000:3000"
+    environment:
+      RAILS_ENV: development
+      DATABASE_URL: postgres://postgres:postgres@db:5432/scheduler_api_development
+    command: ["sh", "-c", "./bin/rails db:prepare db:seed && exec ./bin/rails server -b 0.0.0.0"]
+    volumes:
+      - .:/rails

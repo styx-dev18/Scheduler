@@ -18,11 +18,15 @@ default: &default
   # For details on connection pooling, see Rails configuration guide
   # https://guides.rubyonrails.org/configuring.html#database-pooling
   max_connections: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>
+  host: <%= ENV["DB_HOST"] %>
+  port: <%= ENV.fetch("DB_PORT") { 5432 } %>
+  username: <%= ENV["DB_USERNAME"] %>
+  password: <%= ENV["DB_PASSWORD"] %>
 
 
 development:
   <<: *default
-  database: scheduler_api_development
+  database: <%= ENV.fetch("DB_NAME") { "scheduler_api_development" } %>
 
   # The specified database role being used to connect to PostgreSQL.
   # To create additional roles in PostgreSQL see `$ createuser --help`.
@@ -56,7 +60,8 @@ development:
 # Do not set this db to the same as development or production.
 test:
   <<: *default
-  database: scheduler_api_test
+  max_connections: <%= [ENV.fetch("RAILS_MAX_THREADS") { 5 }.to_i, 25].max %>
+  database: <%= ENV.fetch("DB_NAME_TEST") { "scheduler_api_test" } %>
 
 # As with config/credentials.yml, you never want to store sensitive information,
 # like your database password, in your source code. If your source code is
@@ -88,8 +93,8 @@ production:
   primary: &primary_production
     <<: *default
     database: scheduler_api_production
-    username: scheduler_api
-    password: <%= ENV["SCHEDULER_API_DATABASE_PASSWORD"] %>
+    username: <%= ENV.fetch("DB_USERNAME") { "scheduler_api" } %>
+    password: <%= ENV["DB_PASSWORD"] %>
   cache:
     <<: *primary_production
     database: scheduler_api_production_cache
