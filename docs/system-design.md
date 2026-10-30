@@ -58,6 +58,7 @@ In production, use the managed database's automated backups and point-in-time re
 
 `scripts/persistence_check.sh` needs only `docker compose` and `curl`. It starts the stack, books an appointment through the API, then checks that `GET /api/v1/appointments/{id}` returns 200 after creation, a `web` restart, a `db` restart and `docker compose down` followed by `up`. It prints one line per step and exits 1 naming the failed step. Run it manually; it is not part of `verify.sh` or CI.
 
+
 ## Future steps
 - Partition `appointments` by `start_at` (monthly range partitions) once history grows past what one table serves; exclusion constraints need the partition key in the constraint, so the constraints must be re-expressed per partition.
 - Invalidate or shorten the availability cache per dealership on booking if staleness becomes a problem.
