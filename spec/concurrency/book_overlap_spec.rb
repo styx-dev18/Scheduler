@@ -3,17 +3,19 @@ require "rails_helper"
 RSpec.describe Appointments::Book, "concurrency" do
   self.use_transactional_tests = false
 
-  let(:thread_count) { 2 }
+  let(:thread_count) { 20 }
+  let(:rounds) { 5 }
 
   let!(:dealership) { create(:dealership) }
   let!(:customer) { create(:customer) }
-  let!(:vehicle) { create(:vehicle, customer:) }
+  let!(:vehicles) { Array.new(thread_count) { create(:vehicle, customer:) } }
   let!(:service_type) { create(:service_type) }
   let!(:bay) { create(:service_bay, dealership:) }
   let!(:technician) { create(:technician, dealership:) }
   let!(:opening_hour) { create(:dealership_opening_hour, dealership:) }
   let!(:shift) { create(:technician_shift, technician:) }
-  let(:params) do
+
+  def params_for(vehicle)
     {
       customer_id: customer.id,
       vehicle_id: vehicle.id,
@@ -23,40 +25,59 @@ RSpec.describe Appointments::Book, "concurrency" do
     }
   end
 
+  def delete_appointments
+    ids = Appointment.where(customer_id: customer.id).pluck(:id)
+    AppointmentStatusHistory.where(appointment_id: ids).delete_all
+    Appointment.where(id: ids).delete_all
+  end
+
   after do
-    Appointment.where(customer_id: customer.id).each do |appointment|
-      AppointmentStatusHistory.where(appointment_id: appointment.id).delete_all
-      appointment.delete
-    end
+    delete_appointments
     shift.delete
     opening_hour.delete
     technician.delete
     bay.delete
     service_type.delete
-    vehicle.delete
+    Vehicle.where(customer_id: customer.id).delete_all
     customer.delete
     dealership.delete
   end
 
-  def run_parallel
+  def run_parallel(targets)
     latch = Queue.new
-    threads = Array.new(thread_count) do
+    threads = targets.map do |vehicle|
       Thread.new do
         ActiveRecord::Base.connection_pool.with_connection do
           latch.pop
-          described_class.new.call(params)
+          described_class.new.call(params_for(vehicle))
         end
       end
     end
-    thread_count.times { latch << :go }
+    targets.size.times { latch << :go }
     threads.map(&:value)
   end
 
-  it "books the same vehicle and slot once and rejects the loser with VEHICLE_ALREADY_BOOKED" do
-    successes, failures = run_parallel.partition(&:success?)
+  it "AC7 books the last slot once and rejects 19 racers with a 409 over 5 rounds" do
+    expect(ActiveRecord::Base.connection_pool.size).to be >= thread_count + 1
+
+    rounds.times do
+      successes, failures = run_parallel(vehicles).partition(&:success?)
+
+      expect(successes.count).to eq(1)
+      expect(failures.count).to eq(thread_count - 1)
+      expect(failures.map { |result| ErrorCatalogue.fetch(result.failure.first).status }).to all(eq(409))
+      expect(failures.map { |result| result.failure.first }).to all(satisfy { |code| %w[NO_BAY NO_TECHNICIAN NO_CAPACITY].include?(code) })
+      expect(Appointment.active.where(customer_id: customer.id).count).to eq(1)
+
+      delete_appointments
+    end
+  end
+
+  it "EC3 books the same vehicle once and rejects 19 racers with VEHICLE_ALREADY_BOOKED" do
+    successes, failures = run_parallel(Array.new(thread_count) { vehicles.first }).partition(&:success?)
 
     expect(successes.count).to eq(1)
-    expect(failures.map { |result| result.failure.first }).to eq([ "VEHICLE_ALREADY_BOOKED" ])
+    expect(failures.map { |result| result.failure.first }).to eq(Array.new(thread_count - 1, "VEHICLE_ALREADY_BOOKED"))
     expect(Appointment.where(customer_id: customer.id).count).to eq(1)
   end
 end

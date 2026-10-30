@@ -8,10 +8,12 @@ module Appointments
 
     def initialize(clock: Clock, availability: Availability::Finder.new,
                    strategy: Scheduling::AssignmentStrategies::LeastLoaded.new,
+                   alternatives: Availability::Alternatives.new,
                    slot_minutes: Integer(ENV.fetch("SLOT_MINUTES", "15")))
       @clock = clock
       @availability = availability
       @strategy = strategy
+      @alternatives = alternatives
       @slot_minutes = slot_minutes
     end
 
@@ -63,7 +65,6 @@ module Appointments
 
     def assign_and_persist(customer:, vehicle:, service_type:, dealership:, interval:)
       candidates = @availability.call(dealership:, service_type:, interval:)
-      extra = { starts_at: interval.starts_at.utc.iso8601, ends_at: interval.ends_at.utc.iso8601 }
 
       if candidates.bay_ids.empty? || candidates.technician_ids.empty?
         conflict = vehicle_conflict(vehicle, interval)
@@ -71,17 +72,23 @@ module Appointments
       end
 
       if candidates.bay_ids.empty? && candidates.technician_ids.empty?
-        return fail_with("NO_CAPACITY", "No service bay or technician is available", extra:)
+        return no_availability("NO_CAPACITY", "No service bay or technician is available", dealership:, service_type:, interval:)
       end
-      return fail_with("NO_BAY", "No service bay is available", extra:) if candidates.bay_ids.empty?
-      return fail_with("NO_TECHNICIAN", "No technician is available", extra:) if candidates.technician_ids.empty?
+      if candidates.bay_ids.empty?
+        return no_availability("NO_BAY", "No service bay is available", dealership:, service_type:, interval:)
+      end
+      if candidates.technician_ids.empty?
+        return no_availability("NO_TECHNICIAN", "No technician is available", dealership:, service_type:, interval:)
+      end
 
       bays = candidates.bay_ids.dup
       technicians = candidates.technician_ids.dup
 
       MAX_ASSIGNMENT_ATTEMPTS.times do
         assignment = @strategy.choose(bays:, technicians:, interval:, loads: candidates.technician_loads)
-        return fail_with("NO_CAPACITY", "No service bay or technician is available", extra:) unless assignment
+        unless assignment
+          return no_availability("NO_CAPACITY", "No service bay or technician is available", dealership:, service_type:, interval:)
+        end
 
         begin
           return Success(create_appointment(customer:, vehicle:, service_type:, dealership:, interval:, assignment:))
@@ -99,7 +106,15 @@ module Appointments
         end
       end
 
-      fail_with("NO_CAPACITY", "No service bay or technician is available", extra:)
+      no_availability("NO_CAPACITY", "No service bay or technician is available", dealership:, service_type:, interval:)
+    end
+
+    def no_availability(code, detail, dealership:, service_type:, interval:)
+      fail_with(code, detail, extra: {
+        starts_at: interval.starts_at.utc.iso8601,
+        ends_at: interval.ends_at.utc.iso8601,
+        alternatives: @alternatives.call(dealership:, service_type:, interval:)
+      })
     end
 
     def create_appointment(customer:, vehicle:, service_type:, dealership:, interval:, assignment:)

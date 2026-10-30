@@ -43,4 +43,27 @@ RSpec.describe Availability::FreeBays do
     book(bay_a1, [ 8 ], [ 9 ])
     expect(ids).to include(bay_a1.id)
   end
+
+  it "AC3 excludes a bay whose appointment encloses the interval" do
+    book(bay_a1, [ 8 ], [ 11 ])
+    expect(ids).to eq([ bay_a2.id ])
+  end
+
+  it "AC3 keeps a bay whose block starts when the interval ends" do
+    create(:bay_block, service_bay: bay_a1, start_at: Time.utc(2030, 1, 7, 10), end_at: Time.utc(2030, 1, 7, 11))
+    expect(ids).to eq([ bay_a1.id, bay_a2.id ])
+  end
+
+  it "AC3 returns only lift bays for a lift service type" do
+    lift_type = create(:service_type, required_bay_type: "lift")
+    lift = create(:service_bay, :lift_bay, dealership:)
+    result = described_class.new(dealership:, service_type: lift_type, interval:).call.pluck(:id)
+    expect(result).to include(lift.id)
+    expect(result).not_to include(bay_a1.id, bay_a2.id)
+  end
+
+  it "AC3 never returns a bay of another dealership" do
+    foreign = create(:service_bay, dealership: create(:dealership))
+    expect(ids).not_to include(foreign.id)
+  end
 end

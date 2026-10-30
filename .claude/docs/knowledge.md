@@ -1,6 +1,6 @@
 # Project Knowledge
 
-> Derived from the code at `f6ba77a` (Epic 1 foundation) plus the settled decisions in Epic 0 (`epics/epic-1-backend-project-foundation.md`). Items marked **planned** are decided in an epic but have no code yet; check the cited epic before you build them.
+> Derived from the code at `0f0af0b` (foundation, Epics 2 and 3 core, exclusion constraints) plus the settled decisions in Epic 0 (`epics/epic-1-backend-project-foundation.md`). Items marked **planned** are decided in an epic but have no code yet; check the cited epic before you build them.
 
 ## Coding
 
@@ -15,11 +15,11 @@
 | controllers | `app/controllers/api/v1/` | Strong Parameters or a form in, one service call, a serializer out. `Api::V1::BaseController` holds the `rescue_from` map, `Pagy::Backend`, `pagination_meta` and the `current_customer` seam; `Envelope` (`app/controllers/concerns/envelope.rb`) renders every body | built |
 | errors | `app/errors/` | `ErrorCatalogue`: code to HTTP status and title | built (4 codes; full list in Epic 6 Story 6) |
 | models | `app/models/` | Associations, string enums, scopes, validations that mirror DB constraints | built |
-| forms | `app/forms/` | `ActiveModel::Model` request objects, structural validation only | planned (Epic 2) |
-| services | `app/services/<plural namespace>/` | One use case each, `call` returns a dry-monads `Result` | planned (Epic 2) |
-| queries | `app/queries/<namespace>/` | Multi-scope SQL and range logic | planned (Epics 3, 4) |
-| domain | `app/domain/scheduling/` | Plain Ruby value objects, policies, status machine, assignment strategies | planned (Epics 2, 3, 5) |
-| serializers | `app/serializers/` | Alba 3.11 resources; all JSON shaping | planned (Epic 4) |
+| forms | `app/forms/` | `ActiveModel::Model` request objects, structural validation only (`BookingRequest`) | built |
+| services | `app/services/<plural namespace>/` | One use case each, `call` returns a dry-monads `Result` (`Appointments::Book`) | built |
+| queries | `app/queries/<namespace>/` | Multi-scope SQL and range logic (`Availability::FreeBays`, `FreeTechnicians`, `Finder`, `DaySlots`, `Alternatives`) | built |
+| domain | `app/domain/scheduling/` | Plain Ruby value objects, policies, assignment strategies (`TimeInterval`, `SlotTime`, `OpeningHoursPolicy`, `LeastLoaded`) | built (status machine planned, Epic 5) |
+| serializers | `app/serializers/` | Alba 3.11 resources; all JSON shaping | built for appointments, dealerships and availability slots |
 
 ### Design patterns and why
 - **Pure domain core** (`app/domain/scheduling/`): scheduling rules must be unit-testable without a database (Epic 0 › Architecture Approach).
@@ -36,13 +36,15 @@
 - `status:` overrides the catalogue status where one code covers two HTTP statuses: `ParameterMissing` renders `VALIDATION_ERROR` with `400`, while `RecordInvalid` keeps the catalogue's `422`.
 - Pagination: Pagy 9.4.0 with `Pagy::DEFAULT[:limit] = 25` (`config/initializers/pagy.rb`); pass `pagination_meta(pagy)` as `meta:` to `render_success`. Pagy 9 names the page size `limit`; the envelope exposes it as `per_page`.
 - Seeds are idempotent and use stable UUIDs: `SeedSupport.upsert!(Model, SeedSupport.uuid(namespace, number), attrs)` (`db/seeds.rb`), one file per table group in `db/seeds/NN_name.rb`, loaded in sorted order. Namespaces in use: `0x10`, `0x20`, `0x30`, `0x31`, `0x40`, `0x50`, `0x60`, `0x61`, `0x62`, `0x70`, `0x71`.
-- Booking concurrency (planned, Epic 3 Story 8): availability check, assignment and insert in one transaction; each attempt in `transaction(requires_new: true)`; `ActiveRecord::ExclusionViolation` triggers a bounded retry with the next candidate, then `409`.
+- Booking concurrency (built, `app/services/appointments/book.rb`): availability check, assignment and insert in one transaction; each attempt in `transaction(requires_new: true)`. A `StatementInvalid` whose `cause` is a `PG::ExclusionViolation` is read for its constraint name (`appointments_no_bay_overlap` drops the bay, `appointments_no_technician_overlap` drops the technician, `appointments_no_vehicle_overlap` returns `VEHICLE_ALREADY_BOOKED`). After `MAX_ASSIGNMENT_ATTEMPTS = 3` attempts, or when a candidate list empties, the result is `NO_CAPACITY` (`409`).
+- Availability endpoint (built): `GET /api/v1/availability?dealership_id=&service_type_id=&date=` validates through `AvailabilityRequest`, computes the day's bookable grid with `Availability::DaySlots` (in memory over at most 8 bulk queries) and caches the body in `Rails.cache` for 30 seconds without invalidation on booking. `Availability::Alternatives` reuses `DaySlots` to put up to `ALTERNATIVE_SLOTS_COUNT` (default 3) nearest same-day start times in `error.alternatives` of every `NO_*` failure from `Appointments::Book`.
+- Load and design notes: `bin/rails "scheduler:load_data[N]"` (`lib/tasks/scheduler.rake`) recreates the "Load Test Motors" data set with N non-overlapping appointments. Query plans, measured p95 and the concurrency reasoning are in `docs/system-design.md`.
 
 ### Data architecture
 - Persistence is Active Record on PostgreSQL with `schema_format = :sql`; `db/structure.sql` is the generated schema of record because the schema uses a stored generated `tstzrange` column and GiST indexes that `schema.rb` cannot express.
 - Every table has a UUID primary key from `gen_random_uuid()` (generator default `primary_key_type: :uuid`, `config/application.rb`); every foreign key is `uuid`, `NOT NULL` unless optional, with a real FK constraint.
 - Three time representations (`db/migrate/`): business instants are `timestamptz` (`start_at`/`end_at`); recurring wall-clock times are `time` interpreted in the dealership's IANA zone (`opens_at`/`closes_at`, `starts_at`/`ends_at`); calendar days are `date`. Rails `created_at`/`updated_at` are `timestamp(6) without time zone`.
-- Appointment overlap uses a stored generated column `time_range = tstzrange(start_at, end_at, '[)')` with GiST indexes on `(service_bay_id, time_range)` and `(technician_id, time_range)` (`db/migrate/20260101000005_create_appointments.rb`). The partial exclusion constraints on active statuses are **planned** (Epic 3 Story 8); until that migration lands, nothing in the database prevents double-booking.
+- Appointment overlap uses a stored generated column `time_range = tstzrange(start_at, end_at, '[)')` with GiST indexes on `(service_bay_id, time_range)` and `(technician_id, time_range)` (`db/migrate/20260101000005_create_appointments.rb`). Three partial GiST exclusion constraints on the active statuses (`confirmed`, `in_progress`) are built (`db/migrate/20260301000001`): `appointments_no_bay_overlap`, `appointments_no_technician_overlap` and `appointments_no_vehicle_overlap`. They are the final guard against double-booking.
 - Invariants are enforced twice: named check constraints (`<table>_<rule>_check`) and unique indexes in the database, mirrored by model validations so callers get `422` instead of a database error.
 - Allowed-value sets are string columns with a check constraint plus a frozen constant or string-mapped `enum ... validate: true` on the model (`ServiceBay::BAY_TYPES`, `Appointment` `status`).
 - Ownership: dealership configuration children use `dependent: :destroy`; anything an appointment references uses `dependent: :restrict_with_error` (`app/models/*.rb`). `appointments.lock_version` enables optimistic locking.
@@ -67,10 +69,10 @@
 ## Testing
 
 ### Test pyramid
-- Wide base of fast unit specs: pure domain specs under `spec/domain` (planned) and shoulda-driven model specs under `spec/models` (`spec/models/*_spec.rb`).
-- Middle: database-backed specs that prove PostgreSQL itself enforces the rules (check constraints, the generated `time_range` column, and later the exclusion constraints). They run against the real database because the database is the source of truth (`spec/models/appointment_spec.rb`).
+- Wide base of fast unit specs: pure domain specs under `spec/domain` and shoulda-driven model specs under `spec/models` (`spec/models/*_spec.rb`).
+- Middle: database-backed specs that prove PostgreSQL itself enforces the rules (check constraints, the generated `time_range` column, and the exclusion constraints). They run against the real database because the database is the source of truth (`spec/models/appointment_spec.rb`).
 - Top: request specs for HTTP behaviour (envelope, error mapping, CORS) in `spec/requests/`, and rswag specs in `spec/integration/` that are also the source of the committed OpenAPI document `swagger/v1/openapi.yaml` (`spec/swagger_helper.rb`).
-- Concurrency (race) specs are planned in `spec/concurrency/`, as the only non-transactional layer.
+- Concurrency (race) specs live in `spec/concurrency/`, the only non-transactional layer.
 
 ### Isolation
 - Two load paths: `spec/spec_helper.rb` alone, with a separate Zeitwerk loader for `app/domain` when only `spec/domain` paths are given, and `spec/rails_helper.rb`, which boots Rails, SimpleCov, shoulda-matchers, FactoryBot and `spec/support`. The domain loader isn't active in full-suite runs (see `testing-rules.md`, Critical don't-miss).
