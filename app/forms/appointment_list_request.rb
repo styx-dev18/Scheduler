@@ -1,17 +1,15 @@
 class AppointmentListRequest
   include ActiveModel::Model
+  include PaginatedRequest
 
-  MAX_PER_PAGE = 100
   SORTS = %w[asc desc].freeze
 
-  attr_accessor :customer_id, :status, :from, :to, :sort, :per_page
+  attr_accessor :customer_id, :status, :from, :to, :sort
 
   validates :customer_id, presence: true
   validates :customer_id, format: { with: BookingRequest::UUID_FORMAT, message: "is not a valid UUID" }, allow_blank: true
   validates :status, inclusion: { in: ->(_) { Appointment.statuses.keys } }, allow_blank: true
   validates :sort, inclusion: { in: SORTS }, allow_blank: true
-  validates :per_page, format: { with: /\A\d+\z/, message: "must be a positive integer" }, allow_blank: true
-  validate :per_page_is_positive
   validate :from_is_iso8601
   validate :to_is_iso8601
   validate :to_is_after_from
@@ -26,18 +24,7 @@ class AppointmentListRequest
     }
   end
 
-  def limit
-    [ per_page.presence&.to_i || Pagy::DEFAULT[:limit], MAX_PER_PAGE ].min
-  end
-
   private
-
-  def per_page_is_positive
-    return unless per_page.to_s.match?(/\A\d+\z/)
-    return if per_page.to_i >= 1
-
-    errors.add(:per_page, "must be a positive integer")
-  end
 
   def from_is_iso8601
     errors.add(:from, "must be an ISO-8601 timestamp with a UTC offset") unless valid_instant?(from)
