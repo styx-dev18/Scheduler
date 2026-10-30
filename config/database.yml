@@ -22,6 +22,8 @@ default: &default
   port: <%= ENV.fetch("DB_PORT") { 5432 } %>
   username: <%= ENV["DB_USERNAME"] %>
   password: <%= ENV["DB_PASSWORD"] %>
+  variables:
+    statement_timeout: <%= ENV.fetch("DB_STATEMENT_TIMEOUT_MS") { 5000 } %>
 
 
 development:

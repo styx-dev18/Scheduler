@@ -1,11 +1,21 @@
 module Availability
   class DaySlots
+    METRIC_EVENT = "availability.scheduler".freeze
+
     def initialize(clock: Clock, slot_minutes: Integer(ENV.fetch("SLOT_MINUTES", "15")))
       @clock = clock
       @slot_minutes = slot_minutes
     end
 
     def call(dealership:, service_type:, date:)
+      ActiveSupport::Notifications.instrument(METRIC_EVENT) do
+        slots(dealership:, service_type:, date:)
+      end
+    end
+
+    private
+
+    def slots(dealership:, service_type:, date:)
       zone = ActiveSupport::TimeZone[dealership.time_zone]
       following = date + 1
       day = Scheduling::TimeInterval.new(
@@ -23,8 +33,6 @@ module Availability
         free_bay?(bays, appointments, interval) && free_technician?(technicians, appointments, zone, interval)
       end
     end
-
-    private
 
     def candidates(dealership:, service_type:, zone:, day:)
       policy = opening_policy(dealership, zone)

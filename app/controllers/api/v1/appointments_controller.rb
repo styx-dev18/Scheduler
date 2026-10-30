@@ -8,7 +8,9 @@ module Api
 
         case result
         in Dry::Monads::Success(body)
-          response.headers["Location"] = api_v1_appointment_url(body.with_indifferent_access.fetch(:id))
+          appointment_id = body.with_indifferent_access.fetch(:id)
+          Current.appointment_id = appointment_id
+          response.headers["Location"] = api_v1_appointment_url(appointment_id)
           render_success(body, status: :created)
         in Dry::Monads::Failure[ code, details ]
           render_service_failure(code, details)
@@ -17,6 +19,7 @@ module Api
 
       def show
         appointment = Appointment.includes(*Appointments::ListQuery::INCLUDES).find(params[:id])
+        Current.appointment_id = appointment.id
         render_success(AppointmentSerializer.new(appointment).serializable_hash)
       end
 

@@ -1,0 +1,30 @@
+{
+  "title": "Scheduler booking",
+  "schemaVersion": 39,
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Booking success rate",
+      "gridPos": { "x": 0, "y": 0, "w": 8, "h": 8 },
+      "targets": [
+        { "expr": "sum(rate(booking_success_total[5m])) / sum(rate(booking_attempts_total[5m]))" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Conflict rate by reason",
+      "gridPos": { "x": 8, "y": 0, "w": 8, "h": 8 },
+      "targets": [
+        { "expr": "sum by (reason) (rate(booking_failure_total[5m]))", "legendFormat": "{{reason}}" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "p95 booking duration (s)",
+      "gridPos": { "x": 16, "y": 0, "w": 8, "h": 8 },
+      "targets": [
+        { "expr": "histogram_quantile(0.95, sum by (le) (rate(booking_duration_seconds_bucket[5m])))" }
+      ]
+    }
+  ]
+}

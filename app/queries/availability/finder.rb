@@ -3,8 +3,8 @@ module Availability
     Candidates = Data.define(:bay_ids, :technician_ids, :technician_loads)
 
     def call(dealership:, service_type:, interval:, exclude_appointment_id: nil)
-      bay_ids = FreeBays.new(dealership:, service_type:, interval:, exclude_appointment_id:).call.pluck(:id)
-      technician_ids = FreeTechnicians.new(dealership:, service_type:, interval:, exclude_appointment_id:).call.pluck(:id)
+      bay_ids = FreeBays.new(dealership:, service_type:, interval:, exclude_appointment_id:).ids
+      technician_ids = FreeTechnicians.new(dealership:, service_type:, interval:, exclude_appointment_id:).ids
       Candidates.new(bay_ids:, technician_ids:, technician_loads: loads(dealership, technician_ids, interval, exclude_appointment_id))
     end
 

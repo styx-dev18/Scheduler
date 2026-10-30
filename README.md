@@ -71,8 +71,40 @@ Regenerate the spec with `make docs`.
 
 ## Health endpoints
 
-- `GET /health`: application health
+- `GET /health/live`: liveness, no dependency checks (`GET /health` is an alias)
+- `GET /health/ready`: readiness, runs `SELECT 1` and checks for pending migrations; `503` otherwise
 - `GET /up`: Rails built-in health check
+
+## Observability
+
+Probes are described under Health endpoints. Metrics, logs and traces are configured by environment variables:
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `METRICS_ENABLED` | `false` | Expose Prometheus metrics at `/metrics` |
+| `METRICS_TOKEN` | empty | Bearer token required by `/metrics` when set |
+| `OTEL_ENABLED` | `false` | Enable OpenTelemetry tracing export (optional) |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://localhost:4318` | OTLP collector endpoint |
+| `LOG_LEVEL` | `info` | Log level |
+| `RATE_LIMIT_ENABLED` | `true` | Toggle Rack::Attack throttling |
+| `RATE_LIMIT_REQUESTS` / `RATE_LIMIT_PERIOD` | `300` / `60` | General per-IP limit and window in seconds |
+| `RATE_LIMIT_BOOKING_REQUESTS` / `RATE_LIMIT_BOOKING_PERIOD` | `20` / `60` | Limit for `POST /api/v1/appointments` |
+| `DB_STATEMENT_TIMEOUT_MS` | `5000` | PostgreSQL statement timeout (`bin/docker-entrypoint` sets `0` for `db:prepare` so migrations are exempt) |
+| `RACK_TIMEOUT_SERVICE_TIMEOUT` | `15` | Request timeout in seconds |
+| `WORKER_SHUTDOWN_TIMEOUT` | `25` | Puma worker graceful shutdown in seconds |
+
+Metrics: `booking_attempts_total`, `booking_success_total`, `booking_failure_total{reason}`, `booking_duration_seconds`, `availability_query_duration_seconds`.
+
+Production logs are one JSON line per request with `request_id`, `trace_id`, `appointment_id`, `method`, `path`, `status` and `duration`.
+
+Run the local stack (Prometheus on 9090, Grafana on 3001, Jaeger UI on 16686, OTLP on 4317 and 4318):
+
+```sh
+METRICS_ENABLED=true METRICS_TOKEN=secret bin/rails server
+docker compose -f docker-compose.observability.yml up
+```
+
+Put the same token in `config/observability/prometheus.yml`. Import `config/observability/grafana-dashboard.json` in Grafana (success rate, conflict rate, p95 booking duration).
 
 ## Environment variables
 

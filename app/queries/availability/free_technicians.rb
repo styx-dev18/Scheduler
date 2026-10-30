@@ -1,6 +1,7 @@
 module Availability
   class FreeTechnicians
     TIME_FORMAT = "%H:%M:%S".freeze
+    TRACER = OpenTelemetry.tracer_provider.tracer("scheduler.availability")
 
     def initialize(dealership:, service_type:, interval:, exclude_appointment_id: nil)
       @dealership = dealership
@@ -10,6 +11,17 @@ module Availability
     end
 
     def call
+      query
+    end
+
+    def ids
+      attributes = { "dealership.id" => @dealership.id, "service_type.id" => @service_type.id }
+      TRACER.in_span("availability.free_technicians", attributes:) { query.pluck(:id) }
+    end
+
+    private
+
+    def query
       local_start = @interval.starts_at.in_time_zone(@dealership.time_zone)
       local_end = @interval.ends_at.in_time_zone(@dealership.time_zone)
       return Technician.none unless local_start.to_date == local_end.to_date
@@ -22,8 +34,6 @@ module Availability
       scope = scope.where(id: qualified) if @service_type.required_qualification_id.present?
       scope.distinct.order(:id)
     end
-
-    private
 
     def covering_shifts(local_start, local_end)
       TechnicianShift.where(day_of_week: local_start.wday)

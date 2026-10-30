@@ -993,6 +993,36 @@ paths:
             application/json:
               schema:
                 "$ref": "#/components/schemas/Envelope"
+  "/health/live":
+    get:
+      summary: Liveness check
+      tags:
+      - Health
+      responses:
+        '200':
+          description: AC10 process is alive
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Envelope"
+  "/health/ready":
+    get:
+      summary: Readiness check
+      tags:
+      - Health
+      responses:
+        '200':
+          description: AC10 database is reachable and migrations are applied
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Envelope"
+        '503':
+          description: EC10 database is unavailable or migrations are pending
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Envelope"
   "/api/v1/service-types":
     get:
       summary: List service types

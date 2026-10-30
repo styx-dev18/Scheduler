@@ -103,3 +103,57 @@ In-process notifications are lost if the process dies between commit and publish
 ## Future steps
 - Partition `appointments` by `start_at` (monthly range partitions) once history grows past what one table serves; exclusion constraints need the partition key in the constraint, so the constraints must be re-expressed per partition.
 - Invalidate or shorten the availability cache per dealership on booking if staleness becomes a problem.
+
+## Scaling & Reliability
+
+### Topology
+```mermaid
+flowchart LR
+  C[Clients] --> LB[Load balancer]
+  LB --> W1[Rails + Puma]
+  LB --> W2[Rails + Puma]
+  W1 --> PB[PgBouncer]
+  W2 --> PB
+  PB --> P[(Primary)]
+  P -. replication .-> R[(Read replica)]
+  W1 -. availability reads .-> R
+  W1 --> SC[(Solid Cache / Queue)]
+  Q[Solid Queue workers] --> PB
+  W1 --> OBS[Prometheus / Jaeger]
+  P --> BK[(WAL archive + base backups)]
+```
+
+### Scaling
+- Stateless instances: no session or local state, so any number of web instances sit behind the load balancer; readiness gates traffic.
+- Puma and pool: `WEB_CONCURRENCY` processes times `RAILS_MAX_THREADS` threads, with pool size equal to threads per process. Total connections = instances x workers x threads and must stay under PostgreSQL `max_connections`.
+- PgBouncer in transaction pooling mode multiplexes many app connections onto few server connections; prepared statements must be disabled or protocol-level pooling used.
+- Read replicas: `connects_to` with a reading role serves availability queries. Replica lag means a slot may show free that was just taken. This is acceptable because the read is advisory; booking, rescheduling and cancellation always run on the primary, where the exclusion constraint decides.
+- Partitioning: range partition `appointments` by `start_at` monthly once history is large; constraints must include the partition key.
+- Solid Cache holds short-lived availability results in the database, so no extra infrastructure; stale entries only cause a failed booking, never a double booking.
+- Rate limiting: Rack::Attack per-IP throttles (general and booking); the counter store must be shared (Solid Cache) across instances. Responses are 429 with `Retry-After`.
+- Idempotency: `Idempotency-Key` with `IDEMPOTENCY_TTL` makes client retries after timeouts safe.
+- Solid Queue scaling: add worker processes or threads per queue; jobs are database-backed, so workers scale independently of web.
+
+### Why scale-out is safe
+Double-booking is prevented by PostgreSQL exclusion constraints on bay and technician time ranges, not by application locks or in-process state. Any number of instances can race; the database rejects the loser and the service returns a `Failure`.
+
+### Backup and recovery
+Continuous WAL archiving plus daily base backups give point-in-time recovery. Targets: RPO of 5 minutes or less (WAL archive interval), RTO of 30 minutes (restore base backup, replay WAL, repoint `DATABASE_URL`). Restore is rehearsed quarterly.
+
+### Future path
+- Transactional outbox plus a message broker for domain events (see Outbox above).
+- Read models for dashboards and reporting, fed from events.
+- Kamal for multi-host deploys with rolling restarts and health-checked traffic switching.
+
+### Limitations
+- A single primary is the write ceiling; failover is manual or managed by the provider.
+- Replica reads are eventually consistent.
+- Rate limiting is per IP, so shared NATs are throttled together.
+- Tracing via OpenTelemetry is optional and not enabled by default.
+
+### Quality attributes pass
+- Reliability: exclusion constraints, idempotency keys, statement and request timeouts, graceful worker shutdown, backups with stated RPO/RTO.
+- Scalability: stateless web tier, pooled connections, replicas for reads, partitioning path, queue workers scaled separately.
+- Observability: JSON request logs with request and trace ids, Prometheus booking metrics, optional OTLP traces to Jaeger, liveness and readiness probes.
+- Availability: multiple instances behind readiness-gated load balancing, rate limiting to shed abuse, replica and backup recovery paths.
+- Maintainability: pure-Ruby domain, service objects returning `Success`/`Failure`, a single error catalogue, and docs kept next to the code.

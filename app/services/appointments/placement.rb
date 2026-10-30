@@ -5,6 +5,7 @@ module Appointments
     MAX_ASSIGNMENT_ATTEMPTS = 3
     BAY_CONSTRAINT = "appointments_no_bay_overlap".freeze
     TECHNICIAN_CONSTRAINT = "appointments_no_technician_overlap".freeze
+    TRACER = OpenTelemetry.tracer_provider.tracer("scheduler.booking")
 
     def initialize(clock: Clock, availability: Availability::Finder.new,
                    strategy: Scheduling::AssignmentStrategies::LeastLoaded.new,
@@ -36,8 +37,13 @@ module Appointments
       conflict = vehicle_conflict(vehicle, interval, exclude_appointment_id)
       return conflict if conflict
 
-      ApplicationRecord.transaction do
-        assign_and_persist(vehicle:, service_type:, dealership:, interval:, exclude_appointment_id:, preferred:, persist:)
+      attributes = { "dealership.id" => dealership.id, "service_type.id" => service_type.id }
+      TRACER.in_span("booking.transaction", attributes:) do |span|
+        result = ApplicationRecord.transaction do
+          assign_and_persist(vehicle:, service_type:, dealership:, interval:, exclude_appointment_id:, preferred:, persist:)
+        end
+        span.set_attribute("outcome", outcome(result))
+        result
       end
     end
 
@@ -66,7 +72,11 @@ module Appointments
       first_attempt = true
 
       MAX_ASSIGNMENT_ATTEMPTS.times do
-        assignment = choose(first_attempt ? preferred : nil, bays:, technicians:, interval:, loads: candidates.technician_loads)
+        assignment = TRACER.in_span("booking.assignment", attributes: { "dealership.id" => dealership.id, "service_type.id" => service_type.id }) do |span|
+          chosen = choose(first_attempt ? preferred : nil, bays:, technicians:, interval:, loads: candidates.technician_loads)
+          span.set_attribute("outcome", chosen ? "assigned" : "none")
+          chosen
+        end
         first_attempt = false
         unless assignment
           return no_availability("NO_CAPACITY", "No service bay or technician is available", dealership:, service_type:, interval:)
@@ -88,6 +98,10 @@ module Appointments
       end
 
       no_availability("NO_CAPACITY", "No service bay or technician is available", dealership:, service_type:, interval:)
+    end
+
+    def outcome(result)
+      result.success? ? "success" : result.failure.first.downcase
     end
 
     def choose(preferred, bays:, technicians:, interval:, loads:)

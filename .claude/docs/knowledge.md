@@ -13,7 +13,7 @@
 | Layer | Folder | Owns | State |
 |---|---|---|---|
 | controllers | `app/controllers/api/v1/` | Strong Parameters or a form in, one service call, a serializer out. `Api::V1::BaseController` holds the `rescue_from` map, `Pagy::Backend`, `pagination_meta` and the `current_customer` seam; `Envelope` (`app/controllers/concerns/envelope.rb`) renders every body | built |
-| errors | `app/errors/` | `ErrorCatalogue`: code to HTTP status and title | built (4 codes; full list in Epic 6 Story 6) |
+| errors | `app/errors/` | `ErrorCatalogue`: code to HTTP status and title | built (8 codes incl. `UNAUTHORIZED`, `RATE_LIMITED`, `REQUEST_TIMEOUT`, `SERVICE_UNAVAILABLE`; catalogued in `docs/error-catalogue.md`) |
 | models | `app/models/` | Associations, string enums, scopes, validations that mirror DB constraints | built |
 | forms | `app/forms/` | `ActiveModel::Model` request objects, structural validation only (`BookingRequest`) | built |
 | services | `app/services/<plural namespace>/` | One use case each, `call` returns a dry-monads `Result` (`Appointments::Book`) | built |
@@ -60,8 +60,11 @@
 ### Cross-cutting concerns
 - **Auth:** none for the MVP (Epic 0 assumption A8). `current_customer` in `Api::V1::BaseController` returns `nil` and is the only seam for adding auth.
 - **Validation:** Strong Parameters or form objects at the edge, model validations for invariants, business rules in services as `Failure` (Epic 0 › Validation).
-- **Errors:** the catch-all `rescue_from StandardError` logs `"<class>: <message>"` and renders `INTERNAL_ERROR` with no stack trace. Error codes live in `ErrorCatalogue::ENTRIES`; `docs/error-catalogue.md` is planned (Epic 6 Story 6).
-- **Logging:** production logs to STDOUT through `ActiveSupport::TaggedLogging` tagged with `:request_id`, level from `RAILS_LOG_LEVEL` (default `info`) (`config/environments/production.rb`). Lograge JSON, `Current.request_id`, Yabeda metrics and OpenTelemetry are planned (Epic 6).
+- **Errors:** the catch-all `rescue_from StandardError` logs `"<class>: <message>"` and renders `INTERNAL_ERROR` with no stack trace. Error codes live in `ErrorCatalogue::ENTRIES`; `docs/error-catalogue.md` lists every code (built, Epic 6). New codes: `RATE_LIMITED` (429, rack-attack), `REQUEST_TIMEOUT` (504, rack-timeout), `SERVICE_UNAVAILABLE` (503), `UNAUTHORIZED` (401, `/metrics`).
+- **Logging (built, Epic 6):** Lograge JSON (`config/initializers/lograge.rb`); `Current.request_id`, `trace_id` and `appointment_id` are attached to each line, and `ApplicationJob` propagates `request_id` to jobs. Production still logs to STDOUT, level from `RAILS_LOG_LEVEL` (default `info`).
+- **Metrics (built, Epic 6):** Yabeda (`config/initializers/yabeda.rb`) subscribes to the `booking.scheduler` and `availability.scheduler` notifications. `/metrics` is mounted only when `METRICS_ENABLED=true` and requires a bearer token when `METRICS_TOKEN` is set (`UNAUTHORIZED` otherwise).
+- **Tracing (built, Epic 6):** OpenTelemetry (`config/initializers/opentelemetry.rb`), active only when `OTEL_ENABLED=true`. Spans: `availability.free_bays`, `availability.free_technicians`, `booking.transaction`, `booking.assignment`.
+- **Health and resilience (built, Epic 6):** `/health/live` and `/health/ready` (`HealthController`); rack-attack (`config/initializers/rack_attack.rb`) and rack-timeout (`config/initializers/rack_timeout.rb`); PostgreSQL `statement_timeout` from `DB_STATEMENT_TIMEOUT_MS` (default 5000, set to 0 for `db:prepare` in `bin/docker-entrypoint` so migrations are exempt). Rationale in the Scaling & Reliability section of `docs/system-design.md`; a local Prometheus/Grafana stack is in `docker-compose.observability.yml` and `config/observability/`.
 - **Config:** everything comes from `ENV`, through `dotenv-rails` in development and test (`.env.example`). `config/initializers/required_env.rb` aborts boot in production without `DATABASE_URL` or `DB_HOST`, and without `CORS_ORIGINS`. The database pool is `RAILS_MAX_THREADS` (`config/database.yml`).
 - **Background jobs:** Solid Queue in production (`config/environments/production.rb`); `ApplicationJob` is still the generated stub.
 - **N+1:** Bullet is enabled in development (log only) and raises in test (`config/environments/*.rb`).

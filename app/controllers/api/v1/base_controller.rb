@@ -4,11 +4,21 @@ module Api
       include Envelope
       include Pagy::Backend
 
-      before_action { Current.request_id = request.request_id }
+      before_action do
+        Current.request_id = request.request_id
+        trace_id = OpenTelemetry::Trace.current_span.context.hex_trace_id
+        Current.trace_id = trace_id if OpenTelemetry::Trace.current_span.context.valid?
+      end
 
       rescue_from StandardError do |error|
         Rails.logger.error("#{error.class}: #{error.message}")
         render_failure("INTERNAL_ERROR", detail: "An unexpected error occurred")
+      end
+      rescue_from ActiveRecord::ConnectionNotEstablished, ActiveRecord::ConnectionTimeoutError do
+        render_failure("SERVICE_UNAVAILABLE", detail: "The service is temporarily unavailable")
+      end
+      rescue_from ActiveRecord::QueryCanceled, Rack::Timeout::RequestTimeoutException do
+        render_failure("REQUEST_TIMEOUT", detail: "The request exceeded the server-side time limit")
       end
       rescue_from ActiveRecord::StaleObjectError do
         render_failure("CONCURRENT_MODIFICATION", detail: "The record was modified by another request")
