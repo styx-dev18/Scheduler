@@ -34,6 +34,8 @@ gem "image_processing", "~> 1.2"
 
 # Use Rack CORS for handling Cross-Origin Resource Sharing (CORS), making cross-origin Ajax possible
 gem "rack-cors"
+gem "rack-attack", "~> 6.7"
+gem "rack-timeout", "~> 0.7"
 
 gem "dry-monads", "~> 1.6"
 gem "alba", "~> 3.0"
@@ -41,6 +43,7 @@ gem "pagy", "~> 9.0"
 gem "strong_migrations", "~> 2.0"
 gem "rswag-api", "~> 2.16"
 gem "rswag-ui", "~> 2.16"
+gem "lograge", "~> 0.14"
 
 group :development, :test do
   # See https://guides.rubyonrails.org/debugging_rails_applications.html#debugging-with-the-debug-gem
@@ -69,3 +72,15 @@ group :test do
   gem "prop_check", "~> 1.0"
   gem "simplecov", "~> 0.22", require: false
 end
+
+gem "yabeda", "~> 0.16.0"
+gem "yabeda-rails", "~> 0.11.0"
+gem "yabeda-puma-plugin", "~> 0.9.0"
+gem "yabeda-prometheus", "~> 0.9.1"
+
+gem "opentelemetry-sdk", "~> 1.6"
+gem "opentelemetry-exporter-otlp", "~> 0.29"
+gem "opentelemetry-instrumentation-rails", "~> 0.36"
+gem "opentelemetry-instrumentation-rack", "~> 0.26"
+gem "opentelemetry-instrumentation-pg", "~> 0.30"
+gem "opentelemetry-instrumentation-active_record", "~> 0.8"
