@@ -136,6 +136,7 @@ RSpec.describe "POST /api/v1/appointments" do
     expect(response).to have_http_status(:conflict)
     expect(body["error"]["code"]).to eq("NO_CAPACITY")
     expect(body["error"]).to include("starts_at", "ends_at")
+    expect(body["error"]["alternatives"]).to eq([ "2030-01-07T08:00:00Z", "2030-01-07T10:00:00Z", "2030-01-07T10:15:00Z" ])
   end
 
   it "AC17 replays a stored response for the same key" do

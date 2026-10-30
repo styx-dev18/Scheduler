@@ -86,4 +86,38 @@ RSpec.describe Availability::FreeTechnicians do
     create(:appointment, :cancelled, dealership:, technician: tech, start_at: Time.utc(2030, 1, 7, 9), end_at: Time.utc(2030, 1, 7, 10))
     expect(ids).to eq([ tech.id ])
   end
+
+  context "AC4 dedicated scenarios" do
+    let!(:ec4) { create(:technician, dealership:) }
+
+    before do
+      qualify(ec4)
+      ec4.technician_shifts.destroy_all
+    end
+
+    it "excludes a technician whose shift ends before the interval ends" do
+      shift(ec4, starts_at: "08:00", ends_at: "09:30")
+      expect(ids).not_to include(ec4.id)
+    end
+
+    it "includes a technician whose time off starts when the interval ends" do
+      shift(ec4)
+      create(:technician_time_off, technician: ec4, start_at: Time.utc(2030, 1, 7, 10), end_at: Time.utc(2030, 1, 7, 11))
+      expect(ids).to include(ec4.id)
+    end
+
+    it "returns nothing for an interval crossing midnight" do
+      shift(ec4, starts_at: "00:00", ends_at: "23:59")
+      crossing = Scheduling::TimeInterval.new(starts_at: Time.utc(2030, 1, 7, 23, 30), ends_at: Time.utc(2030, 1, 8, 0, 30))
+      result = described_class.new(dealership:, service_type:, interval: crossing).call.pluck(:id)
+      expect(result).to eq([])
+    end
+
+    it "never returns a qualified technician of another dealership" do
+      foreign = create(:technician, dealership: create(:dealership))
+      qualify(foreign)
+      shift(foreign)
+      expect(ids).not_to include(foreign.id)
+    end
+  end
 end

@@ -140,7 +140,9 @@ RSpec.describe Appointments::Book do
     expect(service.call(params.merge(start_at: "2030-01-07T11:00:00Z"))).to be_success
   end
 
-  it "EC5 maps empty candidates to NO_BAY, NO_TECHNICIAN and NO_CAPACITY with the interval" do
+  it "EC5 maps empty candidates to NO_BAY, NO_TECHNICIAN and NO_CAPACITY with the interval and alternatives" do
+    alternatives = instance_double(Availability::Alternatives, call: [ "2030-01-07T08:00:00Z" ])
+    service = described_class.new(clock:, availability: finder, strategy:, alternatives:, slot_minutes: 15)
     {
       "NO_BAY" => candidates_class.new(bay_ids: [], technician_ids: [ technician.id ], technician_loads: {}),
       "NO_TECHNICIAN" => candidates_class.new(bay_ids: [ bay.id ], technician_ids: [], technician_loads: {}),
@@ -151,7 +153,9 @@ RSpec.describe Appointments::Book do
       result = service.call(params)
 
       expect(code_of(result)).to eq(code)
-      expect(result.failure.last[:extra]).to eq(starts_at: "2030-01-07T09:00:00Z", ends_at: "2030-01-07T10:00:00Z")
+      expect(result.failure.last[:extra]).to eq(
+        starts_at: "2030-01-07T09:00:00Z", ends_at: "2030-01-07T10:00:00Z", alternatives: [ "2030-01-07T08:00:00Z" ]
+      )
     end
     expect(Appointment.count).to eq(0)
   end
@@ -171,5 +175,136 @@ RSpec.describe Appointments::Book do
     expect(strategy).to have_received(:choose).with(
       bays: [ bay.id ], technicians: [ technician.id ], interval: kind_of(Scheduling::TimeInterval), loads: { technician.id => 2 }
     )
+  end
+
+  context "with the real finder and strategy" do
+    let(:qualification) { create(:qualification) }
+    let(:service_type) { create(:service_type, required_qualification: qualification) }
+    let(:real_service) { described_class.new(clock:, slot_minutes: 15) }
+    let(:other_customer) { create(:customer) }
+    let(:bay_a1) { create(:service_bay, dealership:, id: "00000000-0000-4000-8000-0000000000a1") }
+    let(:bay_a2) { create(:service_bay, dealership:, id: "00000000-0000-4000-8000-0000000000a2") }
+    let(:tech_a1) { create(:technician, dealership:) }
+    let(:bay) { bay_a1 }
+    let(:technician) { tech_a1 }
+    let(:slot) { { start_at: Time.utc(2030, 1, 7, 9), end_at: Time.utc(2030, 1, 7, 10) } }
+    let(:window) { { starts_at: "2030-01-07T09:00:00Z", ends_at: "2030-01-07T10:00:00Z" } }
+
+    before do
+      create(:technician_qualification, technician: tech_a1, qualification:)
+      create(:technician_shift, technician: tech_a1)
+      bay_a1
+      bay_a2
+    end
+
+    def occupy_bays
+      [ bay_a1, bay_a2 ].each do |occupied_bay|
+        create(:appointment, dealership:, customer: other_customer, service_bay: occupied_bay, **slot)
+      end
+    end
+
+    def take_time_off
+      create(:technician_time_off, technician: tech_a1, start_at: slot[:start_at], end_at: slot[:end_at])
+    end
+
+    {
+      "NO_BAY" => :occupy_bays,
+      "NO_TECHNICIAN" => :take_time_off
+    }.each do |code, setup|
+      it "AC5 returns #{code} from real data without leaking other customers" do
+        send(setup)
+
+        result = nil
+        expect { result = real_service.call(params) }.not_to change(Appointment, :count)
+
+        expect(code_of(result)).to eq(code)
+        expect(result.failure.last[:extra]).to include(window)
+        leaked = [ other_customer.id, *other_customer.vehicles.ids, *Appointment.where(customer: other_customer).ids ]
+        expect(leaked.none? { |id| result.failure.to_s.include?(id) }).to be(true)
+      end
+    end
+
+    it "AC5 returns NO_CAPACITY from real data without leaking other customers" do
+      occupy_bays
+      take_time_off
+
+      result = nil
+      expect { result = real_service.call(params) }.not_to change(Appointment, :count)
+
+      expect(code_of(result)).to eq("NO_CAPACITY")
+      expect(result.failure.last[:extra]).to include(window)
+      leaked = [ other_customer.id, *Appointment.where(customer: other_customer).ids ]
+      expect(leaked.none? { |id| result.failure.to_s.include?(id) }).to be(true)
+    end
+
+    context "with suggested alternatives" do
+      let(:alternatives) do
+        Availability::Alternatives.new(day_slots: Availability::DaySlots.new(clock:, slot_minutes: 15), count: 3)
+      end
+      let(:alternative_service) { described_class.new(clock:, alternatives:, slot_minutes: 15) }
+
+      it "AC13 suggests the nearest starts and each one books" do
+        occupy_bays
+
+        result = alternative_service.call(params)
+
+        expected = [ "2030-01-07T08:00:00Z", "2030-01-07T10:00:00Z", "2030-01-07T10:15:00Z" ]
+        expect(code_of(result)).to eq("NO_BAY")
+        expect(result.failure.last[:extra][:alternatives]).to eq(expected)
+        expected.each do |alternative|
+          ApplicationRecord.transaction(requires_new: true) do
+            expect(alternative_service.call(params.merge(start_at: alternative))).to be_success
+            raise ActiveRecord::Rollback
+          end
+        end
+      end
+
+      it "EC9 returns an empty list when nothing is left that day" do
+        [ bay_a1, bay_a2 ].each do |occupied_bay|
+          create(:appointment, dealership:, customer: other_customer, service_bay: occupied_bay,
+                               start_at: Time.utc(2030, 1, 7, 8), end_at: Time.utc(2030, 1, 7, 17))
+        end
+
+        result = alternative_service.call(params)
+
+        expect(code_of(result)).to eq("NO_BAY")
+        expect(result.failure.last[:extra][:alternatives]).to eq([])
+      end
+    end
+
+    context "when a concurrent booking holds the first candidate bay" do
+      let(:tech_ac6) { create(:technician, dealership:) }
+      let(:retry_finder) { instance_double(Availability::Finder) }
+      let(:retry_service) do
+        described_class.new(clock:, availability: retry_finder, strategy: Scheduling::AssignmentStrategies::LeastLoaded.new, slot_minutes: 15)
+      end
+
+      before do
+        create(:appointment, dealership:, customer: other_customer, service_bay: bay_a1, technician: tech_ac6, **slot)
+      end
+
+      it "AC6 retries with the next candidate bay" do
+        allow(retry_finder).to receive(:call).and_return(
+          candidates_class.new(bay_ids: [ bay_a1.id, bay_a2.id ], technician_ids: [ tech_a1.id ], technician_loads: {})
+        )
+
+        result = nil
+        expect { result = retry_service.call(params) }.to change(Appointment, :count).by(1)
+
+        expect(result).to be_success
+        expect(result.value!.service_bay_id).to eq(bay_a2.id)
+      end
+
+      it "EC2 fails with NO_CAPACITY when retries run out" do
+        allow(retry_finder).to receive(:call).and_return(
+          candidates_class.new(bay_ids: [ bay_a1.id ], technician_ids: [ tech_a1.id ], technician_loads: {})
+        )
+
+        result = nil
+        expect { result = retry_service.call(params) }.not_to change(Appointment, :count)
+
+        expect(code_of(result)).to eq("NO_CAPACITY")
+      end
+    end
   end
 end

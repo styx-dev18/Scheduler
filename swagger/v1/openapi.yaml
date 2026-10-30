@@ -113,6 +113,73 @@ paths:
               - service_type_id
               - dealership_id
               - start_at
+  "/api/v1/availability":
+    get:
+      summary: List bookable start times for a day
+      tags:
+      - Availability
+      parameters:
+      - name: dealership_id
+        in: query
+        format: uuid
+        required: true
+        schema:
+          type: string
+      - name: service_type_id
+        in: query
+        format: uuid
+        required: true
+        schema:
+          type: string
+      - name: date
+        in: query
+        format: date
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: bookable start times
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                required:
+                - success
+                - data
+        '400':
+          description: invalid parameters
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  error:
+                    type: object
+                required:
+                - success
+                - error
+        '404':
+          description: unknown resource
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  error:
+                    type: object
+                required:
+                - success
+                - error
   "/api/v1/dealerships":
     get:
       summary: List dealerships

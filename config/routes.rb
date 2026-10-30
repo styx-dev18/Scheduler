@@ -12,6 +12,7 @@ Rails.application.routes.draw do
       resources :dealerships, only: :index
       resources :service_types, path: "service-types", only: :index
       resources :appointments, only: :create
+      get "availability", to: "availability#index"
     end
   end
 end
