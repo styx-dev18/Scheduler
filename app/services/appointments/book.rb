@@ -5,6 +5,7 @@ module Appointments
     MAX_ASSIGNMENT_ATTEMPTS = 3
     BAY_CONSTRAINT = "appointments_no_bay_overlap".freeze
     TECHNICIAN_CONSTRAINT = "appointments_no_technician_overlap".freeze
+    CONFIRMED_EVENT = "appointment.confirmed".freeze
 
     def initialize(clock: Clock, availability: Availability::Finder.new,
                    strategy: Scheduling::AssignmentStrategies::LeastLoaded.new,
@@ -56,9 +57,11 @@ module Appointments
       conflict = vehicle_conflict(vehicle, interval)
       return conflict if conflict
 
-      ApplicationRecord.transaction do
+      result = ApplicationRecord.transaction do
         assign_and_persist(customer:, vehicle:, service_type:, dealership:, interval:)
       end
+      publish_confirmed(result.value!) if result.success?
+      result
     end
 
     private
@@ -119,13 +122,28 @@ module Appointments
 
     def create_appointment(customer:, vehicle:, service_type:, dealership:, interval:, assignment:)
       Appointment.transaction(requires_new: true) do
-        Appointment.create!(
+        appointment = Appointment.build_confirmed(
           customer:, vehicle:, service_type:, dealership:,
           technician_id: assignment.technician_id,
           service_bay_id: assignment.bay_id,
           start_at: interval.starts_at,
           end_at: interval.ends_at
         )
+        appointment.save!
+        appointment
+      end
+    end
+
+    def publish_confirmed(appointment)
+      payload = {
+        appointment_id: appointment.id,
+        customer_id: appointment.customer_id,
+        dealership_id: appointment.dealership_id,
+        start_at: appointment.start_at,
+        end_at: appointment.end_at
+      }
+      ActiveRecord.after_all_transactions_commit do
+        ActiveSupport::Notifications.instrument(CONFIRMED_EVENT, payload)
       end
     end
 

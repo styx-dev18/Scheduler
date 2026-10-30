@@ -41,6 +41,23 @@ All three are inside their targets. These are in-process figures and exclude HTT
 - `DaySlots` appointment query: a bitmap scan on `index_appointments_on_technician_id_and_time_range` returns the 180 rows of the day in about 0.23 ms.
 - No query reads `appointments` sequentially, so no index migration was added. `spec/queries/availability/query_plan_spec.rb` keeps this under test with `enable_seqscan = off` on the small test database.
 
+## Persistence and backup
+Appointments live in PostgreSQL on the named volume `pgdata`. `docker compose down` keeps the volume, so data survives; `docker compose down -v` deletes it. Restarting `web` or `db` never touches the volume.
+
+Backup (custom-format dump of the compose database):
+```
+docker compose exec -T db pg_dump -U postgres -Fc scheduler_api_production > scheduler.dump
+```
+
+Restore into a running stack:
+```
+docker compose exec -T db pg_restore -U postgres -d scheduler_api_production --clean --if-exists < scheduler.dump
+```
+
+In production, use the managed database's automated backups and point-in-time recovery instead of dumps from the container.
+
+`scripts/persistence_check.sh` needs only `docker compose` and `curl`. It starts the stack, books an appointment through the API, then checks that `GET /api/v1/appointments/{id}` returns 200 after creation, a `web` restart, a `db` restart and `docker compose down` followed by `up`. It prints one line per step and exits 1 naming the failed step. Run it manually; it is not part of `verify.sh` or CI.
+
 ## Future steps
 - Partition `appointments` by `start_at` (monthly range partitions) once history grows past what one table serves; exclusion constraints need the partition key in the constraint, so the constraints must be re-expressed per partition.
 - Invalidate or shorten the availability cache per dealership on booking if staleness becomes a problem.

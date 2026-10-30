@@ -9,9 +9,11 @@ Rails.application.routes.draw do
 
   namespace :api do
     namespace :v1 do
-      resources :dealerships, only: :index
+      resources :dealerships, only: :index do
+        resources :appointments, only: :index, controller: "dealership_appointments"
+      end
       resources :service_types, path: "service-types", only: :index
-      resources :appointments, only: :create
+      resources :appointments, only: %i[create show index]
       get "availability", to: "availability#index"
     end
   end
