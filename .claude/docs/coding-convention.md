@@ -1,160 +1,186 @@
 # Project Coding Convention
 
 ## Purpose
-Document the project's coding standards, naming conventions, and architectural patterns to serve as the authoritative reference during code reviews. Seed version derived from Epic 0 (`epics/epic-1-backend-project-foundation.md`); `/dev-onboard` refreshes it from the code.
+This is the authoritative reference for code reviews: the project's coding standards, naming conventions and architectural patterns. It is refreshed from the code at `f6ba77a` (Epic 1 foundation). Entries marked **planned** come from an epic and have no code yet. Traps and imperatives are in `.claude/docs/coding-rules.md`.
 
 ## Core Development Principles
-- DRY (Don't Repeat Yourself): Extract common functionality into shared modules, concerns or value objects
-- Single Responsibility Principle: Each class or method has one well-defined purpose; one service object per use case
-- KISS (Keep It Simple, Stupid): Favor simple, readable solutions over clever metaprogramming
-- Separation of Concerns: Controllers shape HTTP, services orchestrate, domain objects decide, models persist, serializers format
+- DRY: extract shared behaviour into concerns (`app/controllers/concerns/envelope.rb`), value objects or the owning model's constant (`ServiceBay::BAY_TYPES` is reused by `ServiceType`)
+- Single Responsibility: one service object per use case; one migration per table group
+- KISS: plain Rails, no metaprogramming; Rails generators and defaults unless a rule here says otherwise
+- Separation of Concerns: controllers shape HTTP, services orchestrate, domain objects decide, models persist and guard invariants, serializers format
 
 ## Naming Conventions
-- Files and directories: `snake_case.rb`, matching the Zeitwerk constant (`app/queries/availability/free_bays.rb` → `Availability::FreeBays`)
-- Classes and modules: `PascalCase`
-- Methods and variables: `snake_case`; predicates end in `?`, mutating or raising methods end in `!`
-- Constants: `UPPER_SNAKE_CASE`, frozen
-- Services: verb inside a plural namespace (`Appointments::Book`, `Appointments::Reschedule`), public entry point `call`
-- Query objects: noun inside a namespace (`Availability::FreeTechnicians`, `Appointments::ListQuery`)
-- Form objects: request noun (`BookingRequest`)
-- Serializers: `<Model>Serializer` (`AppointmentSerializer`)
-- Domain value objects: plain nouns under `Scheduling::` (`TimeInterval`, `SlotTime`)
-- Namespaces may span autoload roots: `Appointments::` appears in both `app/services/` and `app/queries/`
-- Database: plural `snake_case` tables, `<singular>_id` foreign keys, explicit names for check and exclusion constraints
-- JSON keys: `snake_case` (`start_at`, `customer_id`)
+- Files and directories: `snake_case.rb` matching the Zeitwerk constant. Folders directly under `app/` are roots, not namespaces (`app/errors/error_catalogue.rb` → `ErrorCatalogue`, `app/queries/availability/free_bays.rb` → `Availability::FreeBays`)
+- Classes and modules: `PascalCase`; application module `SchedulerApi`
+- Methods and variables: `snake_case`; predicates end in `?`, mutating or raising methods end in `!` (`SeedSupport.upsert!`)
+- Constants: `UPPER_SNAKE_CASE`, frozen (`ErrorCatalogue::ENTRIES`, `ServiceBay::BAY_TYPES`, `Dealership::TIME_ZONES`)
+- Services: verb inside a plural namespace (`Appointments::Book`), public entry point `call` (planned, Epic 2)
+- Query objects: noun inside a namespace (`Availability::FreeTechnicians`, `Appointments::ListQuery`) (planned, Epics 3–4)
+- Form objects: request noun (`BookingRequest`) (planned, Epic 2)
+- Serializers: `<Model>Serializer` (planned, Epic 4)
+- Domain value objects: plain nouns under `Scheduling::` exposing `starts_at`/`ends_at`, which `Appointment.overlapping` relies on (planned, Epic 2)
+- Error codes: `UPPER_SNAKE_CASE` strings, keys of `ErrorCatalogue::ENTRIES` (`VALIDATION_ERROR`, `NOT_FOUND`, `CONCURRENT_MODIFICATION`, `INTERNAL_ERROR`)
+- Database: plural `snake_case` tables (exception: `technician_time_off`), `<singular>_id` uuid foreign keys, check constraints named `<table>_<rule>_check`
+- Time columns: instants `start_at`/`end_at` (`timestamptz`); wall-clock `starts_at`/`ends_at` and `opens_at`/`closes_at` (`time`); calendar days `<noun>_on` (`holiday_on`)
+- Join and child models: `<Parent><Child>` (`DealershipOpeningHour`, `TechnicianQualification`); scoped associations drop the prefix (`has_many :opening_hours, class_name: "DealershipOpeningHour"`)
+- JSON keys: `snake_case` (`total_pages`, `per_page`)
+- Seed files: `db/seeds/NN_<tables>.rb`, two-digit load order
 
 ## File Structure & Organization
 ```
 app/
-├── controllers/api/v1/        # thin controllers, BaseController
-├── domain/scheduling/         # pure Ruby rules
-│   └── assignment_strategies/
-├── forms/                     # ActiveModel form objects
-├── jobs/                      # Active Job (Solid Queue)
+├── controllers/
+│   ├── api/v1/                # BaseController and versioned controllers
+│   ├── concerns/              # Envelope
+│   └── health_controller.rb   # unversioned /health
+├── domain/scheduling/         # pure Ruby rules (planned)
+├── errors/                    # ErrorCatalogue
+├── forms/                     # ActiveModel form objects (planned)
+├── jobs/                      # Active Job (Solid Queue in production)
 ├── models/                    # Active Record aggregates
-├── queries/                   # query objects
-├── serializers/               # Alba resources
-└── services/                  # use cases
-config/initializers/           # lograge, cors, rack_attack, opentelemetry, yabeda, events
-db/migrate/  db/seeds/  db/structure.sql
-lib/tasks/                     # scheduler:* rake tasks
-spec/                          # mirrors app/, plus concurrency/ and support/
-docs/                          # system design, error catalogue, ERD, AI log
+├── queries/                   # query objects (planned)
+├── serializers/               # Alba resources (planned)
+└── services/                  # use cases (planned)
+config/initializers/           # cors, filter_parameter_logging, pagy, required_env, rswag_api, rswag_ui, strong_migrations
+db/migrate/  db/seeds/  db/seeds.rb  db/structure.sql
+db/cable_schema.rb  db/cache_schema.rb  db/queue_schema.rb   # Solid* schemas, production-only databases
+lib/tasks/                     # rake tasks (excluded from autoload)
+swagger/v1/openapi.yaml        # generated by rswag
+docs/                          # erd.md; error-catalogue.md and system design planned
 ```
 
 ## Architectural Patterns
-- Layered Rails with a pure-Ruby domain core; `app/domain` never references Active Record or `Rails.`
-- Service objects: `call` returns `Dry::Monads::Result`; collaborators injected as keyword arguments with defaults
-- Query objects and named scopes hold SQL; the range overlap predicate is `time_range && tstzrange(?, ?, '[)')`
-- Value objects are immutable `Data.define` types that validate on construction
-- Aggregates: `Appointment` owns its status transitions by delegating to `Scheduling::StatusMachine`
-- Domain events: `ActiveSupport::Notifications.instrument`, fired by the service after commit
-- Double-booking: availability check and insert in one transaction; the exclusion constraint is the source of truth
+- Layered Rails with a pure-Ruby domain core (Epic 0 › Architecture Approach)
+- Service objects: `call` returns `Dry::Monads::Result`; collaborators injected as keyword arguments with defaults (planned, Epic 2)
+- Query objects and named scopes hold SQL. The overlap predicate is `time_range && tstzrange(?, ?, '[)')` (`Appointment.overlapping`)
+- Value objects: immutable `Data.define` types that validate on construction (planned, Epic 2)
+- Aggregates: Active Record models own invariants through validations that mirror DB constraints; `Appointment` will delegate status transitions to `Scheduling::StatusMachine` (planned, Epic 5)
+- Domain events: `ActiveSupport::Notifications.instrument`, fired by the service after commit (planned, Epic 5)
+- Double-booking: availability check and insert in one transaction, with partial GiST exclusion constraints as the source of truth (planned, Epic 3 Story 8; GiST indexes exist today)
 
 ## Language Specific Syntax
-- Ruby 3.4: use keyword arguments for anything beyond one positional parameter
-- Use `Data.define` for value objects, not `Struct`
-- Use pattern matching (`case ... in`) to unpack `Result` values where it reads more clearly than `.success?` chains
-- Prefer `freeze`d constants and immutable objects in `app/domain`
+- Ruby 3.4.10 (`.ruby-version`); no `# frozen_string_literal` magic comments
+- Keyword arguments for anything beyond one positional parameter (`render_failure(code, detail:, errors:, status:)`)
+- `Data.define` for domain value objects; `Struct.new(..., keyword_init: true)` appears only for `ErrorCatalogue::Entry`
+- Pattern matching (`case ... in`) to unpack `Result` values where it reads more clearly than `.success?` chains
+- Guard clauses with early `return` in custom validators (`end_after_start` in `app/models/appointment.rb`)
+- Multi-line scopes use `lambda { |arg| ... }`; one-line scopes use `->(arg) { ... }` (`app/models/appointment.rb`)
 
 ## Imports & Dependencies
-- Rely on Zeitwerk autoloading in `app/`; never `require` application files
-- `require` is needed only for gems outside Bundler's auto-require and in `spec/domain` setup
-- Pin gems with pessimistic constraints in `Gemfile`; commit `Gemfile.lock`
+- Zeitwerk autoloads `app/` and `lib/` (except `lib/assets`, `lib/tasks`); never `require` application files
+- `require` only for gems that need it before use (`require "pagy"` in `config/initializers/pagy.rb`)
+- Add gems with a pessimistic constraint (`"~> 1.6"`); commit `Gemfile.lock`. Dev and test tooling goes in `group :development, :test` (`Gemfile`)
 
 ## Logging Standards
-- Lograge JSON lines with `request_id`, `method`, `path`, `status`, `duration`, and `appointment_id` when relevant
-- Use `Rails.logger` outside `app/domain`; never `puts` or `p`
+- Production logs to STDOUT through `ActiveSupport::TaggedLogging`, tagged with `:request_id`, level `ENV.fetch("RAILS_LOG_LEVEL", "info")` (`config/environments/production.rb`)
+- Lograge JSON lines with `request_id`, `method`, `path`, `status`, `duration` and `appointment_id` are planned (Epic 6 Story 1)
+- Use `Rails.logger` outside `app/domain`. Log unexpected errors as `"#{error.class}: #{error.message}"` without backtraces in responses (`app/controllers/api/v1/base_controller.rb`)
 - Levels: `info` for confirmed bookings, `warn` for conflicts, `error` for unexpected failures
 - Never log request bodies; add sensitive keys to `config.filter_parameters`
 
 ## Constants Management
-- Error codes live in the `ErrorCatalogue` module and `docs/error-catalogue.md`
-- Tunables come from `ENV` with defaults (`SLOT_MINUTES`, `ALTERNATIVE_SLOTS_COUNT`); use `ENV.fetch` for required production values
-- Domain constants live on the domain class that owns them
+- Error codes live in `ErrorCatalogue::ENTRIES` (`app/errors/error_catalogue.rb`); `docs/error-catalogue.md` is planned (Epic 6 Story 6)
+- Allowed-value sets are frozen constants on the owning model (`ServiceBay::BAY_TYPES`) and must match the DB check constraint
+- Tunables come from `ENV` with defaults (`SLOT_MINUTES`, `ALTERNATIVE_SLOTS_COUNT`, planned); required production values go through `config/initializers/required_env.rb`
+- Pagination default `Pagy::DEFAULT[:limit] = 25` (`config/initializers/pagy.rb`)
 
 ## Shared Code & Common Modules
-- Controller helpers (envelope, pagination) live in `Api::V1::BaseController`
-- `Current` (`ActiveSupport::CurrentAttributes`) carries `request_id`
-- `Clock` is the injectable time source
+- `Envelope` concern: `render_success` and `render_failure` (`app/controllers/concerns/envelope.rb`)
+- `Api::V1::BaseController`: `rescue_from` map, `Pagy::Backend`, `pagination_meta`, `current_customer` seam
+- `SeedSupport` (`db/seeds.rb`): `uuid(namespace, number)` for stable ids, `upsert!` for idempotent seeds
+- `Clock` (injectable time source) and `Current` (`ActiveSupport::CurrentAttributes` with `request_id`) are planned (Epics 2 and 6)
 
 ## Utilities & Helper Functions
 - Prefer a value object or a domain method over a generic helper module
-- Put cross-cutting Ruby utilities in `lib/` only when they have no domain meaning
+- Put cross-cutting Ruby utilities in `lib/` only when they have no domain meaning; they are autoloaded and follow Zeitwerk naming
 
 ## Error Handling
-- Expected business outcomes: `Failure(:code, details)` from services; no exceptions
-- Programmer errors: raise (`ArgumentError` for invalid value-object construction)
-- `Api::V1::BaseController` `rescue_from`: `RecordNotFound` → 404, `ParameterMissing` and `RecordInvalid` → 400/422, `StaleObjectError` → 409, catch-all → 500 with no stack trace
-- Overlap conflicts: rescue `ActiveRecord::ExclusionViolation` inside a savepoint, retry with the next candidate (bounded), then `409`
-- Error body: envelope `{ success, data, error, message }` with an RFC 7807-style `error` `{ type, title, status, code, detail, errors? }`
-- Every code returned must exist in the error catalogue
+- Expected business outcomes: `Failure(code, details)` from services; no exceptions
+- Programmer errors: raise (`ArgumentError` for invalid value-object construction or an unknown error code in test)
+- `Api::V1::BaseController` `rescue_from`, declared generic-first: `StandardError` → `INTERNAL_ERROR` 500, `StaleObjectError` → `CONCURRENT_MODIFICATION` 409, `RecordInvalid` → `VALIDATION_ERROR` 422 with `errors` from `record.errors.to_hash`, `ParameterMissing` → `VALIDATION_ERROR` 400 with `errors: { param => ["is required"] }`, `RecordNotFound` → `NOT_FOUND` 404
+- Overlap conflicts: rescue `ActiveRecord::ExclusionViolation` inside a savepoint, retry with the next candidate (bounded), then `409` (planned, Epic 3)
+- Error body: `{ success: false, data: nil, error: { type, title, status, code, detail, errors? }, message: detail }` with `type` `https://httpstatuses.com/<status>`
+- Every code returned must exist in `ErrorCatalogue::ENTRIES`
 
 ## Code Comments
 - No code comments, docstrings, or TODO/FIXME markers
 - Exceptions: required magic comments, and a one-line justification next to a `strong_migrations` `safety_assured` block
 - Code must be self-documenting through clear naming and structure
+- Generated Rails files still carry generator comments (`config/`, `Gemfile`); don't add new ones and don't churn existing ones
 - rswag specs serve as API documentation, not code comments
 
 ## Framework Best Practices
 
 ### Rails (API-only)
-- Routes under `namespace :api { namespace :v1 { ... } }`
-- Controllers inherit from `Api::V1::BaseController < ActionController::API`
+- Routes under `namespace :api { namespace :v1 { ... } }`; operational routes (`/health`, `/up`) stay outside it (`config/routes.rb`)
+- Controllers inherit `Api::V1::BaseController < ApplicationController < ActionController::API`
 - Use Strong Parameters (`params.expect` or `require/permit`) or a form object for every write
-- Avoid N+1 queries with `includes`; Bullet raises in test
+- Avoid N+1 queries with `includes`; Bullet raises in test and logs in development (`config/environments/`)
 
 ### Active Record
-- UUID primary keys; `timestamptz` for all times
-- Enforce invariants with database constraints first (foreign keys, check, exclusion), then model validations
-- `enum :status` with explicit string or integer mapping; scopes `active`, `for_vehicle`, `for_technician`, `overlapping`
-- Optimistic locking with `lock_version` on `appointments`
-- Bulk methods (`insert_all`, `update_all`, `upsert_all`) only in seeds and load tasks
+- UUID primary keys (`gen_random_uuid()`); `timestamptz` for business instants. `t.timestamps` stays `timestamp(6) without time zone`
+- Enforce invariants in the database first (FKs, named check constraints, unique indexes), then mirror them in model validations
+- `enum :status` with explicit string mapping and `validate: true`; scopes `active`, `for_vehicle`, `for_technician`, `overlapping` (`app/models/appointment.rb`)
+- Optimistic locking with `lock_version` on `appointments`; `StaleObjectError` maps to `409`
+- `appointments.time_range` is a stored generated column and `attr_readonly`
+- `dependent: :restrict_with_error` towards appointments; `dependent: :destroy` for owned configuration rows
+- Bulk methods (`insert_all`, `update_all`, `upsert_all`) only in seeds and load tasks; current seeds use `find_or_initialize_by` + `update!`
+- Migrations inherit `ActiveRecord::Migration[8.1]` and are checked by `strong_migrations` (`start_after = 20260101000000`, `target_version = 16`)
 
 ### PostgreSQL
-- `btree_gist` enabled; GiST indexes on `(resource_id, time_range)`
-- Exclusion constraints are partial on `status IN ('confirmed','in_progress')` so cancelled rows never block
+- `btree_gist` enabled (`db/migrate/20260101000001_enable_btree_gist.rb`); GiST indexes on `(service_bay_id, time_range)` and `(technician_id, time_range)`
+- Exclusion constraints will be partial on `status IN ('confirmed','in_progress')` so cancelled rows never block (planned, Epic 3 Story 8)
 - READ COMMITTED isolation plus constraints; no table locks
+- Production uses separate databases for Solid Cache, Queue and Cable (`config/database.yml`)
 
 ### dry-monads
 - `include Dry::Monads[:result]` in services; return `Success(value)` or `Failure(code, details)`
-- Controllers translate `Failure` codes to HTTP through the catalogue
+- Controllers translate `Failure` codes to HTTP through `render_failure`
 
 ### Alba and Pagy
-- All JSON shaping in serializers; models stay free of presentation logic
-- Paginate list endpoints with Pagy and put metadata in the envelope; cap `per_page` at 100
+- All JSON shaping in Alba serializers (planned); models stay free of presentation logic
+- Paginate with `pagy(scope)` and send `meta: pagination_meta(pagy)` → `{ page, per_page, total_pages, total_count }`; cap `per_page` at 100 (Epic 4 Story 5)
 
 ### Time zones
-- `config.time_zone = "UTC"`; convert with `ActiveSupport::TimeZone[dealership.time_zone]` at the edges only
+- `config.time_zone = "UTC"`, `active_record.default_timezone = :utc` (`config/application.rb`)
+- Dealership zones are IANA identifiers validated against `TZInfo::Timezone.all_identifiers` (`Dealership::TIME_ZONES`); convert with `ActiveSupport::TimeZone[dealership.time_zone]` at the edges only
 - Parse input with `Time.iso8601`
 
 ## Build Commands & Tooling
 
 ### Development
-- `bin/setup` - Install gems and prepare the database
+- `bin/setup` - Install gems, `db:prepare`, clear logs, start the server (`--skip-server` to stop before it, `--reset` to reset the DB)
 - `bin/dev` or `bin/rails server` - Start the server with code reloading
+- `make setup | up | test | lint | reset-db | docs` - Shortcuts (`Makefile`)
 
 ### Testing
 - `bundle exec rspec` - Full suite
 - `bundle exec rspec spec/domain` - Pure domain specs, no database
 
 ### Code Quality
-- `bundle exec rubocop` - Lint (`rubocop-rails-omakase`)
-- `bin/brakeman` - Security scan
-- `bundle exec bundler-audit check --update` - Gem vulnerabilities
+- `bin/rubocop` / `bundle exec rubocop` - Lint (`rubocop-rails-omakase` 1.1.0, no overrides)
+- `bin/brakeman --no-pager` - Security scan
+- `bin/bundler-audit` - Gem vulnerabilities (`config/bundler-audit.yml` ignore list)
 - `bin/rails zeitwerk:check` - Autoload check
-- `.claude/scripts/verify.sh` - The gate (zeitwerk, lint, security, test)
+- `bin/ci` - Local CI steps from `config/ci.rb` (setup, RuboCop, bundler-audit, Brakeman)
+- `.claude/scripts/verify.sh [--quick]` - The gate (zeitwerk, lint, security, test)
 
 ### Database
 - `bin/rails db:migrate` / `bin/rails db:rollback`
 - `bin/rails db:seed` / `bin/rails db:seed:replant`
 - `bin/rails db:test:prepare`
+- `make reset-db` - `db:drop db:create db:migrate`
+
+### API Docs
+- `make docs` / `bundle exec rake rswag:specs:swaggerize` - Regenerate `swagger/v1/openapi.yaml`
+- `DOCS_ENABLED=true bin/dev` - Serve Swagger UI at `/api-docs`
 
 ### Docker
-- `docker compose up` - App and PostgreSQL (verified once a container runtime is chosen; local PostgreSQL 16 is used meanwhile)
+- `docker compose up` - `web` (production image via Thruster, `db:prepare db:seed` on start) and `db` (`postgres:16`, `pg_isready` healthcheck). Not yet verified; local Homebrew PostgreSQL 16 is used meanwhile
 
 ### Git Hooks (via Lefthook)
-- Pre-commit: RuboCop on staged files
+- Pre-commit: `bundle exec rubocop {staged_files}` on `*.rb` (`lefthook.yml`)
 
 ### Environment Variables Required
-- `DATABASE_URL` or `DB_*`, `RAILS_MAX_THREADS`, `WEB_CONCURRENCY`, `LOG_LEVEL`, `CORS_ORIGINS`, `DOCS_ENABLED`; documented in `.env.example`
+- `DATABASE_URL` or `DB_HOST`/`DB_PORT`/`DB_USERNAME`/`DB_PASSWORD`/`DB_NAME`/`DB_NAME_TEST`, `RAILS_MAX_THREADS`, `WEB_CONCURRENCY`, `CORS_ORIGINS`, `DOCS_ENABLED`, `RAILS_LOG_LEVEL` (production), `SECRET_KEY_BASE` or credentials in production; documented in `.env.example`
+- Production boot aborts without `DATABASE_URL`/`DB_HOST` or `CORS_ORIGINS` (`config/initializers/required_env.rb`)
