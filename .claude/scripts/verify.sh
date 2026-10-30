@@ -68,7 +68,7 @@ for step in "${steps[@]}"; do
 
   echo "verify: FAIL $step (exit $code, ${secs}s) - full log: ${log#"$root"/}"
   echo "----"
-  errors="$(grep -E -i '(error|fail|expected file|rspec \./|^[CWEF]:|[0-9]+:[0-9]+)' "$log" | grep -v -E '^[[:space:]]*# ' | head -n "$max_lines")"
+  errors="$(grep -E '(Error|error:|Failure|FAIL|expected file|rspec \./|^[CWEF]:|^== [^=]+ ==$|^(Confidence|Message|File|Line):|\.rb:[0-9]+)' "$log" | grep -v -E '^[[:space:]]*# |^Errors: 0$|^== (Brakeman Report|Overview|Warning Types|Warnings) ==$' | head -n "$max_lines")"
   if [ -n "$errors" ]; then
     printf '%s\n' "$errors"
   else
