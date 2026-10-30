@@ -2,6 +2,10 @@ module Appointments
   class Book
     include Dry::Monads[:result]
 
+    MAX_ASSIGNMENT_ATTEMPTS = 3
+    BAY_CONSTRAINT = "appointments_no_bay_overlap".freeze
+    TECHNICIAN_CONSTRAINT = "appointments_no_technician_overlap".freeze
+
     def initialize(clock: Clock, availability: Availability::Finder.new,
                    strategy: Scheduling::AssignmentStrategies::LeastLoaded.new,
                    slot_minutes: Integer(ENV.fetch("SLOT_MINUTES", "15")))
@@ -47,11 +51,8 @@ module Appointments
       when :outside_hours then return fail_with("OUTSIDE_OPENING_HOURS", "The requested time is outside opening hours")
       end
 
-      booked_id = Appointment.active.for_vehicle(vehicle.id).overlapping(interval).pick(:id)
-      if booked_id
-        return fail_with("VEHICLE_ALREADY_BOOKED", "The vehicle already has an appointment in that period",
-                         extra: { appointment_id: booked_id })
-      end
+      conflict = vehicle_conflict(vehicle, interval)
+      return conflict if conflict
 
       ApplicationRecord.transaction do
         assign_and_persist(customer:, vehicle:, service_type:, dealership:, interval:)
@@ -64,21 +65,45 @@ module Appointments
       candidates = @availability.call(dealership:, service_type:, interval:)
       extra = { starts_at: interval.starts_at.utc.iso8601, ends_at: interval.ends_at.utc.iso8601 }
 
+      if candidates.bay_ids.empty? || candidates.technician_ids.empty?
+        conflict = vehicle_conflict(vehicle, interval)
+        return conflict if conflict
+      end
+
       if candidates.bay_ids.empty? && candidates.technician_ids.empty?
         return fail_with("NO_CAPACITY", "No service bay or technician is available", extra:)
       end
       return fail_with("NO_BAY", "No service bay is available", extra:) if candidates.bay_ids.empty?
       return fail_with("NO_TECHNICIAN", "No technician is available", extra:) if candidates.technician_ids.empty?
 
-      assignment = @strategy.choose(
-        bays: candidates.bay_ids,
-        technicians: candidates.technician_ids,
-        interval:,
-        loads: candidates.technician_loads
-      )
-      return fail_with("NO_CAPACITY", "No service bay or technician is available", extra:) unless assignment
+      bays = candidates.bay_ids.dup
+      technicians = candidates.technician_ids.dup
 
-      Success(
+      MAX_ASSIGNMENT_ATTEMPTS.times do
+        assignment = @strategy.choose(bays:, technicians:, interval:, loads: candidates.technician_loads)
+        return fail_with("NO_CAPACITY", "No service bay or technician is available", extra:) unless assignment
+
+        begin
+          return Success(create_appointment(customer:, vehicle:, service_type:, dealership:, interval:, assignment:))
+        rescue ActiveRecord::StatementInvalid => e
+          raise unless e.cause.is_a?(PG::ExclusionViolation)
+
+          conflict = vehicle_conflict(vehicle, interval)
+          return conflict if conflict
+
+          case e.cause.result.error_field(PG::PG_DIAG_CONSTRAINT_NAME)
+          when BAY_CONSTRAINT then bays -= [ assignment.bay_id ]
+          when TECHNICIAN_CONSTRAINT then technicians -= [ assignment.technician_id ]
+          end
+          break if bays.empty? || technicians.empty?
+        end
+      end
+
+      fail_with("NO_CAPACITY", "No service bay or technician is available", extra:)
+    end
+
+    def create_appointment(customer:, vehicle:, service_type:, dealership:, interval:, assignment:)
+      Appointment.transaction(requires_new: true) do
         Appointment.create!(
           customer:, vehicle:, service_type:, dealership:,
           technician_id: assignment.technician_id,
@@ -86,7 +111,15 @@ module Appointments
           start_at: interval.starts_at,
           end_at: interval.ends_at
         )
-      )
+      end
+    end
+
+    def vehicle_conflict(vehicle, interval)
+      booked_id = Appointment.active.for_vehicle(vehicle.id).overlapping(interval).pick(:id)
+      return unless booked_id
+
+      fail_with("VEHICLE_ALREADY_BOOKED", "The vehicle already has an appointment in that period",
+                extra: { appointment_id: booked_id })
     end
 
     def opening_policy(dealership)

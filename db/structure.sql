@@ -323,6 +323,30 @@ ALTER TABLE ONLY public.appointment_status_histories
 
 
 --
+-- Name: appointments appointments_no_bay_overlap; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.appointments
+    ADD CONSTRAINT appointments_no_bay_overlap EXCLUDE USING gist (service_bay_id WITH =, time_range WITH &&) WHERE (((status)::text = ANY ((ARRAY['confirmed'::character varying, 'in_progress'::character varying])::text[])));
+
+
+--
+-- Name: appointments appointments_no_technician_overlap; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.appointments
+    ADD CONSTRAINT appointments_no_technician_overlap EXCLUDE USING gist (technician_id WITH =, time_range WITH &&) WHERE (((status)::text = ANY ((ARRAY['confirmed'::character varying, 'in_progress'::character varying])::text[])));
+
+
+--
+-- Name: appointments appointments_no_vehicle_overlap; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.appointments
+    ADD CONSTRAINT appointments_no_vehicle_overlap EXCLUDE USING gist (vehicle_id WITH =, time_range WITH &&) WHERE (((status)::text = ANY ((ARRAY['confirmed'::character varying, 'in_progress'::character varying])::text[])));
+
+
+--
 -- Name: appointments appointments_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -865,6 +889,7 @@ ALTER TABLE ONLY public.dealership_service_types
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260301000001'),
 ('20260201000002'),
 ('20260201000001'),
 ('20260101000005'),
