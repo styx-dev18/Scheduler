@@ -17,9 +17,54 @@ paths:
           type: string
       responses:
         '201':
-          description: appointment booked
+          description: AC4 appointment confirmed
+          headers:
+            Location:
+              schema:
+                type: string
+              description: URL of GET /api/v1/appointments/{id}
           content:
             application/json:
+              examples:
+                confirmed:
+                  value:
+                    success: true
+                    data:
+                      id: 6f1c2a3e-8d4b-4e5f-9a60-1b2c3d4e5f60
+                      status: confirmed
+                      customer_id: 0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d
+                      vehicle_id: 1b2c3d4e-5f60-4b7c-9d8e-0f1a2b3c4d5e
+                      service_type_id: 2c3d4e5f-6071-4c8d-8e9f-1a2b3c4d5e6f
+                      dealership_id: 3d4e5f60-7182-4d9e-9fa0-2b3c4d5e6f70
+                      technician_id: 4e5f6071-8293-4eaf-8ab1-3c4d5e6f7081
+                      service_bay_id: 5f607182-93a4-4fb0-9bc2-4d5e6f708192
+                      start_at: '2030-01-07T09:00:00Z'
+                      end_at: '2030-01-07T10:00:00Z'
+                      local_start_at: '2030-01-07T09:00:00+00:00'
+                      local_end_at: '2030-01-07T10:00:00+00:00'
+                      time_zone: Europe/London
+                      customer:
+                        id: 0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d
+                        name: Alex Morgan
+                      vehicle:
+                        id: 1b2c3d4e-5f60-4b7c-9d8e-0f1a2b3c4d5e
+                        make: Toyota
+                        model: Corolla
+                        year: 2021
+                        license_plate: AB12 CDE
+                      service_type:
+                        id: 2c3d4e5f-6071-4c8d-8e9f-1a2b3c4d5e6f
+                        name: Annual service
+                        duration_minutes: 60
+                      dealership:
+                        id: 3d4e5f60-7182-4d9e-9fa0-2b3c4d5e6f70
+                        name: Central Motors
+                      technician:
+                        id: 4e5f6071-8293-4eaf-8ab1-3c4d5e6f7081
+                        display_name: Sam Taylor
+                      service_bay:
+                        id: 5f607182-93a4-4fb0-9bc2-4d5e6f708192
+                        label: Bay 1
               schema:
                 type: object
                 properties:
@@ -27,6 +72,119 @@ paths:
                     type: boolean
                   data:
                     type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      status:
+                        type: string
+                        enum:
+                        - confirmed
+                        - cancelled
+                      customer_id:
+                        type: string
+                        format: uuid
+                      vehicle_id:
+                        type: string
+                        format: uuid
+                      service_type_id:
+                        type: string
+                        format: uuid
+                      dealership_id:
+                        type: string
+                        format: uuid
+                      technician_id:
+                        type: string
+                        format: uuid
+                      service_bay_id:
+                        type: string
+                        format: uuid
+                      start_at:
+                        type: string
+                        format: date-time
+                      end_at:
+                        type: string
+                        format: date-time
+                      local_start_at:
+                        type: string
+                        format: date-time
+                      local_end_at:
+                        type: string
+                        format: date-time
+                      time_zone:
+                        type: string
+                      customer:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                          name:
+                            type: string
+                      vehicle:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                          make:
+                            type: string
+                          model:
+                            type: string
+                          year:
+                            type: integer
+                            nullable: true
+                          license_plate:
+                            type: string
+                            nullable: true
+                      service_type:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                          name:
+                            type: string
+                          duration_minutes:
+                            type: integer
+                      dealership:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                          name:
+                            type: string
+                      technician:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                          display_name:
+                            type: string
+                      service_bay:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                          label:
+                            type: string
+                    required:
+                    - id
+                    - status
+                    - customer_id
+                    - vehicle_id
+                    - service_type_id
+                    - dealership_id
+                    - technician_id
+                    - service_bay_id
+                    - start_at
+                    - end_at
+                    - local_start_at
+                    - local_end_at
+                    - time_zone
+                    - customer
+                    - vehicle
+                    - service_type
+                    - dealership
+                    - technician
+                    - service_bay
                 required:
                 - success
                 - data
@@ -113,6 +271,214 @@ paths:
               - service_type_id
               - dealership_id
               - start_at
+  "/api/v1/appointments/{id}":
+    get:
+      summary: Retrieve a confirmed appointment
+      tags:
+      - Appointments
+      parameters:
+      - name: id
+        in: path
+        format: uuid
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: AC6 appointment found
+          content:
+            application/json:
+              examples:
+                found:
+                  value:
+                    success: true
+                    data:
+                      id: 6f1c2a3e-8d4b-4e5f-9a60-1b2c3d4e5f60
+                      status: confirmed
+                      customer_id: 0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d
+                      vehicle_id: 1b2c3d4e-5f60-4b7c-9d8e-0f1a2b3c4d5e
+                      service_type_id: 2c3d4e5f-6071-4c8d-8e9f-1a2b3c4d5e6f
+                      dealership_id: 3d4e5f60-7182-4d9e-9fa0-2b3c4d5e6f70
+                      technician_id: 4e5f6071-8293-4eaf-8ab1-3c4d5e6f7081
+                      service_bay_id: 5f607182-93a4-4fb0-9bc2-4d5e6f708192
+                      start_at: '2030-01-07T09:00:00Z'
+                      end_at: '2030-01-07T10:00:00Z'
+                      local_start_at: '2030-01-07T09:00:00+00:00'
+                      local_end_at: '2030-01-07T10:00:00+00:00'
+                      time_zone: Europe/London
+                      customer:
+                        id: 0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d
+                        name: Alex Morgan
+                      vehicle:
+                        id: 1b2c3d4e-5f60-4b7c-9d8e-0f1a2b3c4d5e
+                        make: Toyota
+                        model: Corolla
+                        year: 2021
+                        license_plate: AB12 CDE
+                      service_type:
+                        id: 2c3d4e5f-6071-4c8d-8e9f-1a2b3c4d5e6f
+                        name: Annual service
+                        duration_minutes: 60
+                      dealership:
+                        id: 3d4e5f60-7182-4d9e-9fa0-2b3c4d5e6f70
+                        name: Central Motors
+                      technician:
+                        id: 4e5f6071-8293-4eaf-8ab1-3c4d5e6f7081
+                        display_name: Sam Taylor
+                      service_bay:
+                        id: 5f607182-93a4-4fb0-9bc2-4d5e6f708192
+                        label: Bay 1
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      status:
+                        type: string
+                        enum:
+                        - confirmed
+                        - cancelled
+                      customer_id:
+                        type: string
+                        format: uuid
+                      vehicle_id:
+                        type: string
+                        format: uuid
+                      service_type_id:
+                        type: string
+                        format: uuid
+                      dealership_id:
+                        type: string
+                        format: uuid
+                      technician_id:
+                        type: string
+                        format: uuid
+                      service_bay_id:
+                        type: string
+                        format: uuid
+                      start_at:
+                        type: string
+                        format: date-time
+                      end_at:
+                        type: string
+                        format: date-time
+                      local_start_at:
+                        type: string
+                        format: date-time
+                      local_end_at:
+                        type: string
+                        format: date-time
+                      time_zone:
+                        type: string
+                      customer:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                          name:
+                            type: string
+                      vehicle:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                          make:
+                            type: string
+                          model:
+                            type: string
+                          year:
+                            type: integer
+                            nullable: true
+                          license_plate:
+                            type: string
+                            nullable: true
+                      service_type:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                          name:
+                            type: string
+                          duration_minutes:
+                            type: integer
+                      dealership:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                          name:
+                            type: string
+                      technician:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                          display_name:
+                            type: string
+                      service_bay:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                          label:
+                            type: string
+                    required:
+                    - id
+                    - status
+                    - customer_id
+                    - vehicle_id
+                    - service_type_id
+                    - dealership_id
+                    - technician_id
+                    - service_bay_id
+                    - start_at
+                    - end_at
+                    - local_start_at
+                    - local_end_at
+                    - time_zone
+                    - customer
+                    - vehicle
+                    - service_type
+                    - dealership
+                    - technician
+                    - service_bay
+                required:
+                - success
+                - data
+        '400':
+          description: EC5 malformed id
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  error:
+                    type: object
+                required:
+                - success
+                - error
+        '404':
+          description: EC4 unknown id
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  error:
+                    type: object
+                required:
+                - success
+                - error
   "/api/v1/availability":
     get:
       summary: List bookable start times for a day

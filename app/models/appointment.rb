@@ -28,6 +28,10 @@ class Appointment < ApplicationRecord
     where("time_range && tstzrange(?, ?, '[)')", interval.starts_at, interval.ends_at)
   }
 
+  def self.build_confirmed(**attrs)
+    new(**attrs, status: "confirmed")
+  end
+
   private
 
   def end_after_start

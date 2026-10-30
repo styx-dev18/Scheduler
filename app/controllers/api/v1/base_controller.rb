@@ -19,7 +19,7 @@ module Api
                        errors: { error.param.to_s => [ "is required" ] }, status: 400)
       end
       rescue_from ActiveRecord::RecordNotFound do |error|
-        render_failure("NOT_FOUND", detail: error.message)
+        render_failure(error.model == "Appointment" ? "APPOINTMENT_NOT_FOUND" : "NOT_FOUND", detail: error.message)
       end
       rescue_from Pagy::VariableError do
         render_failure("VALIDATION_ERROR", detail: "Invalid page", errors: { "page" => [ "is invalid" ] }, status: 400)

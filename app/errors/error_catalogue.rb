@@ -4,6 +4,7 @@ module ErrorCatalogue
   ENTRIES = {
     "VALIDATION_ERROR" => Entry.new(code: "VALIDATION_ERROR", status: 422, title: "Validation failed"),
     "NOT_FOUND" => Entry.new(code: "NOT_FOUND", status: 404, title: "Resource not found"),
+    "APPOINTMENT_NOT_FOUND" => Entry.new(code: "APPOINTMENT_NOT_FOUND", status: 404, title: "Appointment not found"),
     "CONCURRENT_MODIFICATION" => Entry.new(code: "CONCURRENT_MODIFICATION", status: 409, title: "Concurrent modification"),
     "INTERNAL_ERROR" => Entry.new(code: "INTERNAL_ERROR", status: 500, title: "Internal server error"),
     "START_TIME_IN_PAST" => Entry.new(code: "START_TIME_IN_PAST", status: 422, title: "Start time is in the past"),
