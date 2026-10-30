@@ -44,21 +44,30 @@ RSpec.describe Appointments::Book, "atomicity" do
     expect(events).to be_empty
   end
 
-  it "AC3 leaves nothing behind when the appointment insert raises" do
-    allow_any_instance_of(Appointment).to receive(:save!).and_raise(ActiveRecord::RecordNotSaved, "insert failed")
-    service = Appointments::IdempotentBook.new
+  it "AC3 leaves nothing behind when the appointment insert fails" do
+    strategy = instance_double(Scheduling::AssignmentStrategies::LeastLoaded)
+    allow(strategy).to receive(:choose).and_return(Scheduling::Assignment.new(bay_id: SecureRandom.uuid, technician_id: technician.id))
+    service = Appointments::IdempotentBook.new(book: described_class.new(strategy:))
 
-    expect { service.call(key: "key-ac3-insert", params:) }.to raise_error(ActiveRecord::RecordNotSaved)
+    expect { service.call(key: "key-ac3-insert", params:) }.to raise_error(ActiveRecord::RecordInvalid)
 
     expect(counts).to eq([ 0, 0 ])
     expect(events).to be_empty
   end
 
-  it "AC3 and EC2 leave nothing behind and publish nothing when the idempotency write raises" do
-    allow_any_instance_of(IdempotencyKey).to receive(:update!).and_raise(ActiveRecord::StatementInvalid, "key write failed")
-    service = Appointments::IdempotentBook.new
+  it "AC3 and EC2 leave nothing behind and publish nothing when the idempotency write fails" do
+    real_book = described_class.new
+    book = instance_double(described_class)
+    allow(book).to receive(:call) do |book_params|
+      booked = real_book.call(book_params).value!
+      Dry::Monads::Success(Appointment.new(id: SecureRandom.uuid, customer: booked.customer, vehicle: booked.vehicle,
+                                           service_type: booked.service_type, dealership: booked.dealership,
+                                           technician: booked.technician, service_bay: booked.service_bay,
+                                           start_at: booked.start_at, end_at: booked.end_at, status: "confirmed"))
+    end
+    service = Appointments::IdempotentBook.new(book:)
 
-    expect { service.call(key: "key-ec2", params:) }.to raise_error(ActiveRecord::StatementInvalid)
+    expect { service.call(key: "key-ec2", params:) }.to raise_error(ActiveRecord::StatementInvalid, /foreign key/i)
 
     expect(counts).to eq([ 0, 0 ])
     expect(events).to be_empty
