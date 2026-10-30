@@ -4,6 +4,8 @@
 erDiagram
   dealerships ||--o{ dealership_opening_hours : has
   dealerships ||--o{ dealership_holidays : has
+  dealerships ||--o{ dealership_service_types : offers
+  service_types ||--o{ dealership_service_types : offered_at
   dealerships ||--o{ service_bays : has
   dealerships ||--o{ technicians : employs
   dealerships ||--o{ appointments : hosts
@@ -90,6 +92,12 @@ erDiagram
     int duration_minutes
     uuid required_qualification_id FK
     string required_bay_type
+    text description
+  }
+  dealership_service_types {
+    uuid id PK
+    uuid dealership_id FK
+    uuid service_type_id FK
   }
   customers {
     uuid id PK

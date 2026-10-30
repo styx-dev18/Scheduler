@@ -26,6 +26,14 @@ class ErrorHandlingProbeController < Api::V1::BaseController
     raise ActiveRecord::StaleObjectError.new(nil, "update")
   end
 
+  def with_extra
+    render_failure("NO_BAY", detail: "No bay", extra: { starts_at: "2030-01-07T09:00:00Z", ends_at: "2030-01-07T10:00:00Z" })
+  end
+
+  def bad_page
+    pagy(Dealership.all, page: 0)
+  end
+
   def boom
     raise "secret internal failure"
   end
@@ -38,6 +46,8 @@ RSpec.describe "BaseController error handling" do
       get "probe/missing_param" => "error_handling_probe#missing_param"
       get "probe/invalid" => "error_handling_probe#invalid"
       get "probe/stale" => "error_handling_probe#stale"
+      get "probe/with_extra" => "error_handling_probe#with_extra"
+      get "probe/bad_page" => "error_handling_probe#bad_page"
       get "probe/boom" => "error_handling_probe#boom"
     end
   end
@@ -82,6 +92,20 @@ RSpec.describe "BaseController error handling" do
     get "/probe/stale"
 
     expect_envelope(status: 409, code: "CONCURRENT_MODIFICATION")
+  end
+
+  it "merges extra into the error object" do
+    get "/probe/with_extra"
+
+    body = expect_envelope(status: 409, code: "NO_BAY")
+    expect(body["error"]).to include("starts_at" => "2030-01-07T09:00:00Z", "ends_at" => "2030-01-07T10:00:00Z")
+  end
+
+  it "maps Pagy::VariableError to 400 VALIDATION_ERROR on page" do
+    get "/probe/bad_page"
+
+    body = expect_envelope(status: 400, code: "VALIDATION_ERROR")
+    expect(body["error"]["errors"]).to eq("page" => [ "is invalid" ])
   end
 
   it "AC7 maps unexpected errors to 500 without leaking a backtrace" do

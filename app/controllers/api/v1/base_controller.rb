@@ -21,6 +21,9 @@ module Api
       rescue_from ActiveRecord::RecordNotFound do |error|
         render_failure("NOT_FOUND", detail: error.message)
       end
+      rescue_from Pagy::VariableError do
+        render_failure("VALIDATION_ERROR", detail: "Invalid page", errors: { "page" => [ "is invalid" ] }, status: 400)
+      end
 
       private
 

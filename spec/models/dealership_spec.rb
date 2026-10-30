@@ -8,6 +8,8 @@ RSpec.describe Dealership do
   it { is_expected.to have_many(:service_bays).dependent(:destroy) }
   it { is_expected.to have_many(:technicians).dependent(:destroy) }
   it { is_expected.to have_many(:appointments).dependent(:restrict_with_error) }
+  it { is_expected.to have_many(:dealership_service_types).dependent(:destroy) }
+  it { is_expected.to have_many(:service_types).through(:dealership_service_types) }
   it { is_expected.to validate_presence_of(:name) }
   it { is_expected.to validate_presence_of(:time_zone) }
 

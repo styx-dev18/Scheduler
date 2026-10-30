@@ -140,6 +140,19 @@ CREATE TABLE public.dealership_opening_hours (
 
 
 --
+-- Name: dealership_service_types; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.dealership_service_types (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    dealership_id uuid NOT NULL,
+    service_type_id uuid NOT NULL,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL
+);
+
+
+--
 -- Name: dealerships; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -218,6 +231,7 @@ CREATE TABLE public.service_types (
     required_bay_type character varying DEFAULT 'general'::character varying NOT NULL,
     created_at timestamp(6) without time zone NOT NULL,
     updated_at timestamp(6) without time zone NOT NULL,
+    description text,
     CONSTRAINT service_types_duration_minutes_check CHECK ((duration_minutes > 0)),
     CONSTRAINT service_types_required_bay_type_check CHECK (((required_bay_type)::text = ANY ((ARRAY['general'::character varying, 'lift'::character varying, 'alignment'::character varying])::text[])))
 );
@@ -309,6 +323,30 @@ ALTER TABLE ONLY public.appointment_status_histories
 
 
 --
+-- Name: appointments appointments_no_bay_overlap; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.appointments
+    ADD CONSTRAINT appointments_no_bay_overlap EXCLUDE USING gist (service_bay_id WITH =, time_range WITH &&) WHERE (((status)::text = ANY ((ARRAY['confirmed'::character varying, 'in_progress'::character varying])::text[])));
+
+
+--
+-- Name: appointments appointments_no_technician_overlap; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.appointments
+    ADD CONSTRAINT appointments_no_technician_overlap EXCLUDE USING gist (technician_id WITH =, time_range WITH &&) WHERE (((status)::text = ANY ((ARRAY['confirmed'::character varying, 'in_progress'::character varying])::text[])));
+
+
+--
+-- Name: appointments appointments_no_vehicle_overlap; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.appointments
+    ADD CONSTRAINT appointments_no_vehicle_overlap EXCLUDE USING gist (vehicle_id WITH =, time_range WITH &&) WHERE (((status)::text = ANY ((ARRAY['confirmed'::character varying, 'in_progress'::character varying])::text[])));
+
+
+--
 -- Name: appointments appointments_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -354,6 +392,14 @@ ALTER TABLE ONLY public.dealership_holidays
 
 ALTER TABLE ONLY public.dealership_opening_hours
     ADD CONSTRAINT dealership_opening_hours_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: dealership_service_types dealership_service_types_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.dealership_service_types
+    ADD CONSTRAINT dealership_service_types_pkey PRIMARY KEY (id);
 
 
 --
@@ -452,6 +498,13 @@ CREATE INDEX idx_on_dealership_id_day_of_week_41c682f7d2 ON public.dealership_op
 
 
 --
+-- Name: idx_on_dealership_id_service_type_id_f99dfbb88b; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX idx_on_dealership_id_service_type_id_f99dfbb88b ON public.dealership_service_types USING btree (dealership_id, service_type_id);
+
+
+--
 -- Name: idx_on_technician_id_qualification_id_3c8d696923; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -547,6 +600,13 @@ CREATE UNIQUE INDEX index_dealership_holidays_on_dealership_id_and_holiday_on ON
 --
 
 CREATE INDEX index_dealership_opening_hours_on_dealership_id ON public.dealership_opening_hours USING btree (dealership_id);
+
+
+--
+-- Name: index_dealership_service_types_on_service_type_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_dealership_service_types_on_service_type_id ON public.dealership_service_types USING btree (service_type_id);
 
 
 --
@@ -743,6 +803,14 @@ ALTER TABLE ONLY public.appointment_status_histories
 
 
 --
+-- Name: dealership_service_types fk_rails_8680cd6ccc; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.dealership_service_types
+    ADD CONSTRAINT fk_rails_8680cd6ccc FOREIGN KEY (dealership_id) REFERENCES public.dealerships(id);
+
+
+--
 -- Name: appointments fk_rails_882571afb2; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -807,12 +875,23 @@ ALTER TABLE ONLY public.idempotency_keys
 
 
 --
+-- Name: dealership_service_types fk_rails_f8b27a1aef; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.dealership_service_types
+    ADD CONSTRAINT fk_rails_f8b27a1aef FOREIGN KEY (service_type_id) REFERENCES public.service_types(id);
+
+
+--
 -- PostgreSQL database dump complete
 --
 
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260301000001'),
+('20260201000002'),
+('20260201000001'),
 ('20260101000005'),
 ('20260101000004'),
 ('20260101000003'),
