@@ -64,7 +64,7 @@ group :development, :test do
   gem "faker", "~> 3.5"
   gem "rswag-specs", "~> 2.16"
   gem "bullet", "~> 8.0"
-  gem "lefthook", "~> 1.11", require: false
+  gem "lefthook", "~> 2.2", require: false
 end
 
 group :test do
