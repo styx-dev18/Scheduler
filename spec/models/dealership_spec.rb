@@ -14,4 +14,13 @@ RSpec.describe Dealership do
   it "AC5 rejects an unknown time zone" do
     expect(build(:dealership, time_zone: "Mars/Base")).not_to be_valid
   end
+
+  it "accepts UTC and America/Detroit" do
+    expect(build(:dealership, time_zone: "UTC")).to be_valid
+    expect(build(:dealership, time_zone: "America/Detroit")).to be_valid
+  end
+
+  it "rejects Mars/Olympus" do
+    expect(build(:dealership, time_zone: "Mars/Olympus")).not_to be_valid
+  end
 end

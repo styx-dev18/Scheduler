@@ -32,7 +32,12 @@ RSpec.configure do |config|
               status: { type: :integer },
               code: { type: :string },
               detail: { type: :string },
-              errors: { type: :array, items: { type: :object } }
+              errors: {
+                type: :object,
+                nullable: true,
+                additionalProperties: { type: :array, items: { type: :string } },
+                example: { name: [ "can't be blank" ] }
+              }
             },
             required: %w[type title status code detail]
           }
