@@ -9,7 +9,7 @@ module Envelope
     render json: body, status: status
   end
 
-  def render_failure(code, detail: nil, errors: nil, status: nil)
+  def render_failure(code, detail: nil, errors: nil, status: nil, extra: nil)
     entry = ErrorCatalogue.fetch(code)
     if entry.nil?
       raise ArgumentError, "Unknown error code: #{code}" if Rails.env.test?
@@ -25,6 +25,7 @@ module Envelope
       detail: detail
     }
     error[:errors] = errors if errors
+    error.merge!(extra) if extra.present?
     render json: { success: false, data: nil, error: error, message: detail }, status: http_status
   end
 end

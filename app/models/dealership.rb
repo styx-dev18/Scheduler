@@ -6,6 +6,8 @@ class Dealership < ApplicationRecord
   has_many :service_bays, dependent: :destroy
   has_many :technicians, dependent: :destroy
   has_many :appointments, dependent: :restrict_with_error
+  has_many :dealership_service_types, dependent: :destroy
+  has_many :service_types, through: :dealership_service_types
 
   validates :name, presence: true
   validates :time_zone, presence: true, inclusion: { in: TIME_ZONES }

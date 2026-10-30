@@ -4,6 +4,150 @@ info:
   title: Unified Service Scheduler API
   version: v1
 paths:
+  "/api/v1/appointments":
+    post:
+      summary: Book an appointment
+      tags:
+      - Appointments
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+      responses:
+        '201':
+          description: appointment booked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                required:
+                - success
+                - data
+        '400':
+          description: malformed request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  error:
+                    type: object
+                required:
+                - success
+                - error
+        '404':
+          description: unknown resource
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  error:
+                    type: object
+                required:
+                - success
+                - error
+        '409':
+          description: vehicle already booked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  error:
+                    type: object
+                required:
+                - success
+                - error
+        '422':
+          description: outside opening hours
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  error:
+                    type: object
+                required:
+                - success
+                - error
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                customer_id:
+                  type: string
+                  format: uuid
+                vehicle_id:
+                  type: string
+                  format: uuid
+                service_type_id:
+                  type: string
+                  format: uuid
+                dealership_id:
+                  type: string
+                  format: uuid
+                start_at:
+                  type: string
+                  format: date-time
+              required:
+              - customer_id
+              - vehicle_id
+              - service_type_id
+              - dealership_id
+              - start_at
+  "/api/v1/dealerships":
+    get:
+      summary: List dealerships
+      tags:
+      - Dealerships
+      parameters:
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: AC7 dealerships with opening hours
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                  meta:
+                    type: object
+                required:
+                - success
+                - data
+                - meta
+        '400':
+          description: EC4 invalid page
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Envelope"
   "/health":
     get:
       summary: Health check
@@ -16,6 +160,40 @@ paths:
             application/json:
               schema:
                 "$ref": "#/components/schemas/Envelope"
+  "/api/v1/service-types":
+    get:
+      summary: List service types
+      tags:
+      - Service types
+      parameters:
+      - name: dealership_id
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: EC4 unknown or malformed dealership id
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                  meta:
+                    type: object
+                required:
+                - success
+                - data
+                - meta
 servers:
 - url: http://localhost:3000
 components:

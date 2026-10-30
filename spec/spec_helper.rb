@@ -22,3 +22,5 @@ RSpec.configure do |config|
   config.order = :random
   Kernel.srand config.seed
 end
+
+require_relative "rails_helper" unless domain_only
