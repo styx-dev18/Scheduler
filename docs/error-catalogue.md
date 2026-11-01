@@ -24,3 +24,7 @@
 | `RATE_LIMITED` | 429 | Too many requests | More requests than the per-client limit within the throttle window. |
 | `REQUEST_TIMEOUT` | 504 | Request timed out | The request exceeded the server-side time limit. |
 | `SERVICE_UNAVAILABLE` | 503 | Service unavailable | A dependency such as the database is temporarily unreachable. |
+
+## Notes
+
+- `VALIDATION_ERROR`: form and parameter failures at the controller (malformed or missing input) are returned as 400, and service-level validation failures are returned as 422. The status in the table is the service-level value.
