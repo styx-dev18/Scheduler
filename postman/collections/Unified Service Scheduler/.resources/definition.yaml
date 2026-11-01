@@ -1,0 +1,20 @@
+$kind: collection
+name: Unified Service Scheduler
+description: Client-side harness for the booking flow. Books, conflicts, replays, reschedules and cancels one appointment per run.
+scripts:
+  - type: http:beforeRequest
+    language: text/javascript
+    code: |-
+      if (!pm.collectionVariables.get('slotDate')) {
+        const day = 24 * 60 * 60 * 1000;
+        const date = new Date(Date.now() + 7 * day);
+        date.setUTCHours(0, 0, 0, 0);
+        while (date.getUTCDay() !== 1) {
+          date.setTime(date.getTime() + day);
+        }
+        const slotDate = date.toISOString().slice(0, 10);
+        pm.collectionVariables.set('slotDate', slotDate);
+        pm.collectionVariables.set('startAt', slotDate + 'T15:00:00Z');
+        pm.collectionVariables.set('rescheduleAt', slotDate + 'T18:00:00Z');
+        pm.collectionVariables.set('idempotencyKey', pm.variables.replaceIn('{{$guid}}'));
+      }

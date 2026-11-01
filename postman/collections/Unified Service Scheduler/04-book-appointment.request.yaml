@@ -1,0 +1,31 @@
+$kind: http-request
+name: Book appointment
+method: POST
+url: '{{baseUrl}}/api/v1/appointments'
+order: 4000
+headers:
+  - key: Content-Type
+    value: application/json
+  - key: Idempotency-Key
+    value: '{{idempotencyKey}}'
+body:
+  type: json
+  content: |-
+    {
+      "customer_id": "{{customerId}}",
+      "vehicle_id": "{{vehicleId}}",
+      "service_type_id": "{{serviceTypeId}}",
+      "dealership_id": "{{dealershipId}}",
+      "start_at": "{{startAt}}"
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('status is 201', () => pm.response.to.have.status(201));
+      pm.test('appointment is confirmed', () => {
+        const data = pm.response.json().data;
+        pm.expect(data.status).to.eql('confirmed');
+        pm.collectionVariables.set('appointmentId', data.id);
+        pm.collectionVariables.set('lockVersion', String(data.lock_version));
+      });

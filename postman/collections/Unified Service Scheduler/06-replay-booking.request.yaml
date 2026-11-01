@@ -1,0 +1,28 @@
+$kind: http-request
+name: Replay booking with the same key
+method: POST
+url: '{{baseUrl}}/api/v1/appointments'
+order: 6000
+headers:
+  - key: Content-Type
+    value: application/json
+  - key: Idempotency-Key
+    value: '{{idempotencyKey}}'
+body:
+  type: json
+  content: |-
+    {
+      "customer_id": "{{customerId}}",
+      "vehicle_id": "{{vehicleId}}",
+      "service_type_id": "{{serviceTypeId}}",
+      "dealership_id": "{{dealershipId}}",
+      "start_at": "{{startAt}}"
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('status is 201', () => pm.response.to.have.status(201));
+      pm.test('same appointment id is returned', () => {
+        pm.expect(pm.response.json().data.id).to.eql(pm.collectionVariables.get('appointmentId'));
+      });

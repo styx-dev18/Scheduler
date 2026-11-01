@@ -16,7 +16,7 @@ RSpec.describe "Tracing" do
 
   after { Rails.application.reload_routes! }
 
-  it "AC-trace leaves Current.trace_id nil and succeeds with the default tracer" do
+  it "EC14 leaves Current.trace_id nil and succeeds with the default tracer" do
     get "/probe/trace"
 
     expect(response).to have_http_status(:ok)
@@ -24,7 +24,7 @@ RSpec.describe "Tracing" do
     expect(response.parsed_body["request_id"]).to be_present
   end
 
-  it "AC-trace sets Current.trace_id to the 32-hex trace id of a valid span context" do
+  it "AC20 sets Current.trace_id to the 32-hex trace id of a valid span context" do
     trace_id = nil
 
     test_tracer.in_span("request") do |span|
@@ -38,20 +38,20 @@ RSpec.describe "Tracing" do
 end
 
 RSpec.describe "Tracing configuration" do
-  it "AC-trace serves real endpoints with tracing disabled" do
+  it "EC14 serves real endpoints with tracing disabled" do
     get "/health"
 
     expect(response).to have_http_status(:ok)
   end
 
-  it "AC-trace does not configure the SDK tracer provider when OTEL_ENABLED is not true" do
+  it "EC14 does not configure the SDK tracer provider when OTEL_ENABLED is not true" do
     expect(ENV["OTEL_ENABLED"]).not_to eq("true")
     expect(OpenTelemetry.tracer_provider).to be_a(OpenTelemetry::Internal::ProxyTracerProvider)
   end
 end
 
 RSpec.describe "OpenTelemetry boot" do
-  it "AC-trace boots with OTEL_ENABLED=true and installs a real tracer provider" do
+  it "AC21 boots with OTEL_ENABLED=true and installs a real tracer provider" do
     script = 'exit(OpenTelemetry.tracer_provider.is_a?(OpenTelemetry::SDK::Trace::TracerProvider) ? 0 : 1)'
     env = { "OTEL_ENABLED" => "true", "RAILS_ENV" => "test", "OTEL_TRACES_EXPORTER" => "none" }
 

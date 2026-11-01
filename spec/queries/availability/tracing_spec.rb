@@ -8,7 +8,7 @@ RSpec.describe "Availability tracing" do
   let(:interval) { Scheduling::TimeInterval.new(starts_at: Time.utc(2030, 1, 7, 9), ends_at: Time.utc(2030, 1, 7, 10)) }
   let(:expected_attributes) { { "dealership.id" => dealership.id, "service_type.id" => service_type.id } }
 
-  it "AC-trace records availability.free_bays with dealership and service type ids" do
+  it "AC19 records availability.free_bays with dealership and service type ids" do
     bay = create(:service_bay, dealership:)
 
     ids = Availability::FreeBays.new(dealership:, service_type:, interval:).ids
@@ -17,7 +17,7 @@ RSpec.describe "Availability tracing" do
     expect(finished_spans("availability.free_bays").sole.attributes).to include(expected_attributes)
   end
 
-  it "AC-trace records availability.free_technicians with dealership and service type ids" do
+  it "AC19 records availability.free_technicians with dealership and service type ids" do
     technician = create(:technician, dealership:)
     create(:technician_shift, technician:)
 
@@ -27,26 +27,29 @@ RSpec.describe "Availability tracing" do
     expect(finished_spans("availability.free_technicians").sole.attributes).to include(expected_attributes)
   end
 
-  it "AC-trace runs the free_bays SQL inside the span" do
+  it "AC19 runs the free_bays SQL inside the span" do
     create(:service_bay, dealership:)
     active_names = []
-    subscriber = ActiveSupport::Notifications.subscribe("sql.active_record") do
-      active_names << OpenTelemetry::Trace.current_span.name if OpenTelemetry::Trace.current_span.respond_to?(:name)
+    callback = lambda do |*|
+      span = OpenTelemetry::Trace.current_span
+      active_names << span.name if span.context.valid?
     end
 
-    Availability::FreeBays.new(dealership:, service_type:, interval:).ids
-    ActiveSupport::Notifications.unsubscribe(subscriber)
+    ActiveSupport::Notifications.subscribed(callback, "sql.active_record") do
+      Availability::FreeBays.new(dealership:, service_type:, interval:).ids
+    end
 
+    expect(active_names).not_to be_empty
     expect(active_names).to include("availability.free_bays")
   end
 
-  it "AC-trace does not create the span until ids is called" do
+  it "EC16 does not create the span until ids is called" do
     Availability::FreeBays.new(dealership:, service_type:, interval:).call
 
     expect(finished_spans("availability.free_bays")).to be_empty
   end
 
-  it "AC-trace records both availability spans when the finder runs" do
+  it "AC19 records both availability spans when the finder runs" do
     Availability::Finder.new.call(dealership:, service_type:, interval:, exclude_appointment_id: nil)
 
     expect(finished_spans.map(&:name)).to include("availability.free_bays", "availability.free_technicians")

@@ -4,7 +4,7 @@ services:
       context: .
       args:
         BUNDLE_WITHOUT: "test"
-    ports:
+    ports: !override
       - "3000:3000"
     environment:
       RAILS_ENV: development

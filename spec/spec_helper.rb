@@ -1,6 +1,7 @@
+require "simplecov"
 require "zeitwerk"
 
-domain_only = !ARGV.empty? && ARGV.all? { |arg| arg.start_with?("spec/domain") }
+domain_only = !ARGV.empty? && ARGV.all? { |arg| arg.delete_prefix("./").start_with?("spec/domain") }
 
 if domain_only
   domain_loader = Zeitwerk::Loader.new

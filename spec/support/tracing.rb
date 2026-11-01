@@ -10,9 +10,7 @@ RSpec.shared_context "with in-memory tracing" do
   let(:test_tracer) { tracer_provider.tracer("spec") }
 
   before do
-    stub_const("Appointments::Placement::TRACER", test_tracer)
-    stub_const("Availability::FreeBays::TRACER", test_tracer)
-    stub_const("Availability::FreeTechnicians::TRACER", test_tracer)
+    allow(Tracing).to receive(:tracer).and_return(test_tracer)
   end
 
   def finished_spans(name = nil)

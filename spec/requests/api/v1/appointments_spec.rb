@@ -165,4 +165,59 @@ RSpec.describe "POST /api/v1/appointments" do
     expect(response).to have_http_status(:bad_request)
     expect(body["error"]["errors"]).to have_key("Idempotency-Key")
   end
+
+  it "AC6 reports NO_BAY when the only bay is taken" do
+    other = create(:vehicle)
+    tech2 = create(:technician, dealership:)
+    create(:appointment, dealership:, customer: other.customer, vehicle: other, technician: tech2, service_bay: bay, service_type:)
+
+    expect { post_booking }.not_to change(Appointment, :count)
+
+    expect(response).to have_http_status(:conflict)
+    expect(body["error"]["code"]).to eq("NO_BAY")
+    expect(body["error"]["alternatives"]).to be_an(Array)
+  end
+
+  it "AC7 reports NO_TECHNICIAN when the technician is taken but a bay is free" do
+    create(:service_bay, dealership:)
+    other = create(:vehicle)
+    create(:appointment, dealership:, customer: other.customer, vehicle: other, technician: tech, service_bay: bay, service_type:)
+
+    post_booking
+
+    expect(response).to have_http_status(:conflict)
+    expect(body["error"]["code"]).to eq("NO_TECHNICIAN")
+  end
+
+  it "EC5 reports IDEMPOTENCY_KEY_IN_PROGRESS for an unfinished key" do
+    fingerprint = Digest::SHA256.hexdigest(JSON.generate(payload.stringify_keys.sort.to_h))
+    create(:idempotency_key, key: "idem-ec5", request_fingerprint: fingerprint, response_status: nil)
+
+    expect { post_booking(payload, { "Idempotency-Key" => "idem-ec5" }) }.not_to change(Appointment, :count)
+
+    expect(response).to have_http_status(:conflict)
+    expect(body["error"]["code"]).to eq("IDEMPOTENCY_KEY_IN_PROGRESS")
+  end
+
+  {
+    vehicle_id: "Vehicle not found",
+    service_type_id: "Service type not found",
+    dealership_id: "Dealership not found"
+  }.each do |field, detail|
+    it "EC6 returns 404 for an unknown #{field}" do
+      post_booking(payload.merge(field => unknown_id))
+
+      expect(response).to have_http_status(:not_found)
+      expect(body["error"]["code"]).to eq("NOT_FOUND")
+      expect(body["error"]["detail"]).to eq(detail)
+    end
+  end
+
+  it "EC7 rejects a malformed vehicle_id" do
+    post_booking(payload.merge(vehicle_id: "not-a-uuid"))
+
+    expect(response).to have_http_status(:bad_request)
+    expect(body["error"]["code"]).to eq("VALIDATION_ERROR")
+    expect(body["error"]["errors"]["vehicle_id"]).to include("is not a valid UUID")
+  end
 end

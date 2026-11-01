@@ -6,8 +6,8 @@ module Api
 
       before_action do
         Current.request_id = request.request_id
-        trace_id = OpenTelemetry::Trace.current_span.context.hex_trace_id
-        Current.trace_id = trace_id if OpenTelemetry::Trace.current_span.context.valid?
+        context = OpenTelemetry::Trace.current_span.context
+        Current.trace_id = context.hex_trace_id if context.valid?
       end
 
       rescue_from StandardError do |error|

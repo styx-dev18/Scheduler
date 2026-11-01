@@ -1,0 +1,14 @@
+$kind: http-request
+name: List dealerships
+method: GET
+url: '{{baseUrl}}/api/v1/dealerships'
+order: 1000
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('status is 200', () => pm.response.to.have.status(200));
+      pm.test('data contains the Manhattan dealership', () => {
+        const ids = pm.response.json().data.map((d) => d.id);
+        pm.expect(ids).to.include(pm.variables.get('dealershipId'));
+      });
