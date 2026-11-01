@@ -5,7 +5,7 @@ module Appointments
     MAX_ASSIGNMENT_ATTEMPTS = 3
     BAY_CONSTRAINT = "appointments_no_bay_overlap".freeze
     TECHNICIAN_CONSTRAINT = "appointments_no_technician_overlap".freeze
-    TRACER = OpenTelemetry.tracer_provider.tracer("scheduler.booking")
+    TRACING_SCOPE = "scheduler.booking".freeze
 
     def initialize(clock: Clock, availability: Availability::Finder.new,
                    strategy: Scheduling::AssignmentStrategies::LeastLoaded.new,
@@ -37,8 +37,7 @@ module Appointments
       conflict = vehicle_conflict(vehicle, interval, exclude_appointment_id)
       return conflict if conflict
 
-      attributes = { "dealership.id" => dealership.id, "service_type.id" => service_type.id }
-      TRACER.in_span("booking.transaction", attributes:) do |span|
+      Tracing.in_span("booking.transaction", scope: TRACING_SCOPE, dealership:, service_type:) do |span|
         result = ApplicationRecord.transaction do
           assign_and_persist(vehicle:, service_type:, dealership:, interval:, exclude_appointment_id:, preferred:, persist:)
         end
@@ -72,7 +71,7 @@ module Appointments
       first_attempt = true
 
       MAX_ASSIGNMENT_ATTEMPTS.times do
-        assignment = TRACER.in_span("booking.assignment", attributes: { "dealership.id" => dealership.id, "service_type.id" => service_type.id }) do |span|
+        assignment = Tracing.in_span("booking.assignment", scope: TRACING_SCOPE, dealership:, service_type:) do |span|
           chosen = choose(first_attempt ? preferred : nil, bays:, technicians:, interval:, loads: candidates.technician_loads)
           span.set_attribute("outcome", chosen ? "assigned" : "none")
           chosen

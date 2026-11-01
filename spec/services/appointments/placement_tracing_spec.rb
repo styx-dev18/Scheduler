@@ -27,7 +27,7 @@ RSpec.describe Appointments::Placement, "tracing" do
     placement.call(vehicle:, service_type:, dealership:, starts_at:, &persist)
   end
 
-  it "AC-trace records booking.transaction with booking.assignment nested under it and the attributes" do
+  it "AC19 records booking.transaction with booking.assignment nested under it and the attributes" do
     result = place(Time.utc(2030, 1, 7, 9))
 
     transaction = finished_spans("booking.transaction").sole
@@ -41,14 +41,14 @@ RSpec.describe Appointments::Placement, "tracing" do
     end
   end
 
-  it "AC-trace sets outcome success on the transaction and assigned on the assignment" do
+  it "AC22 sets outcome success on the transaction and assigned on the assignment" do
     place(Time.utc(2030, 1, 7, 9))
 
     expect(finished_spans("booking.transaction").sole.attributes["outcome"]).to eq("success")
     expect(finished_spans("booking.assignment").sole.attributes["outcome"]).to eq("assigned")
   end
 
-  it "AC-trace sets the transaction outcome to the lowercase failure code on a conflict" do
+  it "AC22 sets the transaction outcome to the lowercase failure code on a conflict" do
     create(:appointment, dealership:, service_bay: bay, technician:,
                          start_at: Time.utc(2030, 1, 7, 9), end_at: Time.utc(2030, 1, 7, 10))
 
@@ -62,7 +62,7 @@ RSpec.describe Appointments::Placement, "tracing" do
     end
   end
 
-  it "AC-trace records no booking spans when validation fails before the transaction" do
+  it "EC15 records no booking spans when validation fails before the transaction" do
     result = place(Time.utc(2029, 12, 31, 9))
 
     expect(result.failure.first).to eq("START_TIME_IN_PAST")

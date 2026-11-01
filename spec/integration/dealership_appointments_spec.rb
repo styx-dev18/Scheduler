@@ -17,7 +17,7 @@ RSpec.describe "GET /api/v1/dealerships/{dealership_id}/appointments" do
       let(:dealership) { create(:dealership) }
       let(:dealership_id) { dealership.id }
 
-      response "200", "schedule for the dealership" do
+      response "200", "AC8 schedule for the dealership" do
         schema type: :object,
                properties: {
                  success: { type: :boolean },
@@ -39,7 +39,7 @@ RSpec.describe "GET /api/v1/dealerships/{dealership_id}/appointments" do
         end
       end
 
-      response "400", "malformed dealership id" do
+      response "400", "AC8 malformed dealership id" do
         schema "$ref" => "#/components/schemas/Envelope"
         let(:dealership_id) { "nope" }
 
@@ -50,7 +50,7 @@ RSpec.describe "GET /api/v1/dealerships/{dealership_id}/appointments" do
         end
       end
 
-      response "404", "unknown dealership" do
+      response "404", "AC8 unknown dealership" do
         schema "$ref" => "#/components/schemas/Envelope"
         let(:dealership_id) { "00000000-0000-4000-8000-000000000000" }
 

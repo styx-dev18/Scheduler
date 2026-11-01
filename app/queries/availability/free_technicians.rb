@@ -1,7 +1,7 @@
 module Availability
   class FreeTechnicians
     TIME_FORMAT = "%H:%M:%S".freeze
-    TRACER = OpenTelemetry.tracer_provider.tracer("scheduler.availability")
+    TRACING_SCOPE = "scheduler.availability".freeze
 
     def initialize(dealership:, service_type:, interval:, exclude_appointment_id: nil)
       @dealership = dealership
@@ -15,8 +15,7 @@ module Availability
     end
 
     def ids
-      attributes = { "dealership.id" => @dealership.id, "service_type.id" => @service_type.id }
-      TRACER.in_span("availability.free_technicians", attributes:) { query.pluck(:id) }
+      Tracing.in_span("availability.free_technicians", scope: TRACING_SCOPE, dealership: @dealership, service_type: @service_type) { query.pluck(:id) }
     end
 
     private

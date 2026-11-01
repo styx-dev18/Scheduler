@@ -1001,7 +1001,7 @@ paths:
           type: integer
       responses:
         '200':
-          description: schedule for the dealership
+          description: AC8 schedule for the dealership
           content:
             application/json:
               schema:
@@ -1020,13 +1020,13 @@ paths:
                 - data
                 - meta
         '400':
-          description: malformed dealership id
+          description: AC8 malformed dealership id
           content:
             application/json:
               schema:
                 "$ref": "#/components/schemas/Envelope"
         '404':
-          description: unknown dealership
+          description: AC8 unknown dealership
           content:
             application/json:
               schema:
