@@ -36,7 +36,12 @@ worker_shutdown_timeout ENV.fetch("WORKER_SHUTDOWN_TIMEOUT", 25).to_i
 # Allow puma to be restarted by `bin/rails restart` command.
 plugin :tmp_restart
 
-plugin :yabeda
+if ENV["METRICS_ENABLED"] == "true"
+  control_socket = File.expand_path("../tmp/sockets/pumactl-#{ENV.fetch('PORT', 3000)}.sock", __dir__)
+  FileUtils.mkdir_p(File.dirname(control_socket))
+  activate_control_app "unix://#{control_socket}"
+  plugin :yabeda
+end
 
 # Run the Solid Queue supervisor inside of Puma for single-server deployments.
 plugin :solid_queue if ENV["SOLID_QUEUE_IN_PUMA"]

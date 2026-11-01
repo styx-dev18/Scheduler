@@ -50,3 +50,136 @@ jobs:
       - name: Lint code for consistent style
         run: bin/rubocop -f github
 
+  zeitwerk:
+    runs-on: ubuntu-latest
+    env:
+      RAILS_ENV: test
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          bundler-cache: true
+
+      - name: Check autoloading
+        run: bin/rails zeitwerk:check
+
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      RAILS_ENV: test
+      DB_HOST: localhost
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Install PostgreSQL client
+        run: command -v psql >/dev/null || (sudo apt-get update && sudo apt-get install --no-install-recommends -y postgresql-client)
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          bundler-cache: true
+
+      - name: Prepare database
+        run: bin/rails db:test:prepare
+
+      - name: Run RSpec with coverage thresholds
+        run: bundle exec rspec
+
+      - name: Repeat concurrency specs
+        run: RACE_ITERATIONS=50 COVERAGE=false bundle exec rspec spec/concurrency
+
+      - name: Boot smoke
+        run: |
+          set -euo pipefail
+          smoke() {
+            local metrics="$1"
+            rm -f tmp/pids/server.pid
+            PORT=3999 PIDFILE=tmp/pids/smoke.pid METRICS_ENABLED="$metrics" bin/rails server -p 3999 > "tmp/smoke-$metrics.log" 2>&1 &
+            local server=$!
+            local ok=""
+            for _ in $(seq 1 30); do
+              if curl -fsS http://127.0.0.1:3999/health/live > /dev/null 2>&1; then ok=1; break; fi
+              sleep 1
+            done
+            if [ -n "$ok" ] && [ "$metrics" = "true" ]; then
+              ok=""
+              for _ in $(seq 1 15); do
+                if curl -fsS http://127.0.0.1:3999/metrics | grep -q puma_; then ok=1; break; fi
+                sleep 1
+              done
+            fi
+            kill "$server" 2>/dev/null || true
+            wait "$server" 2>/dev/null || true
+            if [ -z "$ok" ]; then cat "tmp/smoke-$metrics.log"; return 1; fi
+          }
+          smoke false
+          smoke true
+
+  openapi_drift:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      RAILS_ENV: test
+      DB_HOST: localhost
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Install PostgreSQL client
+        run: command -v psql >/dev/null || (sudo apt-get update && sudo apt-get install --no-install-recommends -y postgresql-client)
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          bundler-cache: true
+
+      - name: Prepare database
+        run: bin/rails db:test:prepare
+
+      - name: Regenerate OpenAPI document
+        run: COVERAGE=false bundle exec rake rswag:specs:swaggerize
+
+      - name: Fail on drift
+        run: git diff --exit-code swagger/
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Build image
+        run: docker build .
