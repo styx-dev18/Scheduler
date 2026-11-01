@@ -4,7 +4,7 @@ RSpec.describe Appointments::Book, "concurrency" do
   self.use_transactional_tests = false
 
   let(:thread_count) { 20 }
-  let(:rounds) { 5 }
+  let(:rounds) { Integer(ENV.fetch("RACE_ITERATIONS", "5")) }
 
   let!(:dealership) { create(:dealership) }
   let!(:customer) { create(:customer) }
@@ -44,20 +44,23 @@ RSpec.describe Appointments::Book, "concurrency" do
   end
 
   def run_parallel(targets)
-    latch = Queue.new
+    ready = Concurrent::CountDownLatch.new(targets.size)
+    go = Concurrent::CountDownLatch.new(1)
     threads = targets.map do |vehicle|
       Thread.new do
         ActiveRecord::Base.connection_pool.with_connection do
-          latch.pop
+          ready.count_down
+          go.wait
           described_class.new.call(params_for(vehicle))
         end
       end
     end
-    targets.size.times { latch << :go }
+    ready.wait(10)
+    go.count_down
     threads.map(&:value)
   end
 
-  it "AC7 books the last slot once and rejects 19 racers with a 409 over 5 rounds" do
+  it "AC7 books the last slot once and rejects 19 racers with a 409 over RACE_ITERATIONS rounds" do
     expect(ActiveRecord::Base.connection_pool.size).to be >= thread_count + 1
 
     rounds.times do
