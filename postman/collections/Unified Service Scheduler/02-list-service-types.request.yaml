@@ -1,0 +1,14 @@
+$kind: http-request
+name: List service types
+method: GET
+url: '{{baseUrl}}/api/v1/service-types'
+order: 2000
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('status is 200', () => pm.response.to.have.status(200));
+      pm.test('data contains the Full Service type', () => {
+        const ids = pm.response.json().data.map((s) => s.id);
+        pm.expect(ids).to.include(pm.variables.get('serviceTypeId'));
+      });

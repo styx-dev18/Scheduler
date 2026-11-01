@@ -1,0 +1,18 @@
+$kind: http-request
+name: Check availability
+method: GET
+url: '{{baseUrl}}/api/v1/availability?dealership_id={{dealershipId}}&service_type_id={{serviceTypeId}}&date={{slotDate}}'
+order: 3000
+queryParams:
+  - key: dealership_id
+    value: '{{dealershipId}}'
+  - key: service_type_id
+    value: '{{serviceTypeId}}'
+  - key: date
+    value: '{{slotDate}}'
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('status is 200', () => pm.response.to.have.status(200));
+      pm.test('slots is an array', () => pm.expect(pm.response.json().data.slots).to.be.an('array'));
