@@ -39,7 +39,7 @@ gem "rack-timeout", "~> 0.7"
 
 gem "dry-monads", "~> 1.6"
 gem "alba", "~> 3.0"
-gem "pagy", "~> 9.0"
+gem "pagy", "~> 43.8"
 gem "strong_migrations", "~> 2.0"
 gem "rswag-api", "~> 2.16"
 gem "rswag-ui", "~> 2.16"
