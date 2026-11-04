@@ -189,7 +189,7 @@ GEM
       thor (~> 1.3)
       zeitwerk (>= 2.6.18, < 3.0)
     language_server-protocol (3.17.0.6)
-    lefthook (1.13.6)
+    lefthook (2.2.2)
     lint_roller (1.1.0)
     logger (1.7.0)
     lograge (0.15.1)
@@ -559,7 +559,7 @@ DEPENDENCIES
   faker (~> 3.5)
   image_processing (~> 1.2)
   kamal
-  lefthook (~> 1.11)
+  lefthook (~> 2.2)
   lograge (~> 0.14)
   opentelemetry-exporter-otlp (~> 0.29)
   opentelemetry-instrumentation-active_record (~> 0.8)
@@ -663,7 +663,7 @@ CHECKSUMS
   json-schema (6.2.1) sha256=c0bf6113d772348bfd159fb096950beeb1e1e25aaeea50b676bd45191d8dbdf3
   kamal (2.12.0) sha256=c51d1ab085e515470f98d0c0f043637122b5ebf76e8b610cb1fbbed0b7f9b8fa
   language_server-protocol (3.17.0.6) sha256=5ef2c0c138f8267e1bc631d3328347d354f96724b0af22f2c79516120443b7f0
-  lefthook (1.13.6) sha256=87625da61ede93261eaa85e27181a96b4fd9666ba834b0ee8dcbde2b46f784e9
+  lefthook (2.2.2) sha256=c43405b5fd14cd6de0dad8bfb76895767e8f21bb342460f6434191b32c5be333
   lint_roller (1.1.0) sha256=2c0c845b632a7d172cb849cc90c1bce937a28c5c8ccccb50dfd46a485003cc87
   logger (1.7.0) sha256=196edec7cc44b66cfb40f9755ce11b392f21f7967696af15d274dde7edff0203
   lograge (0.15.1) sha256=b8a6b3d45f15855f3b038ce01019317e783fa9ddf774eb20818c751438c5c761
