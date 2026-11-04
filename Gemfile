@@ -70,7 +70,7 @@ end
 group :test do
   gem "shoulda-matchers", "~> 6.4"
   gem "prop_check", "~> 1.0"
-  gem "simplecov", "~> 0.22", require: false
+  gem "simplecov", "~> 1.3", require: false
 end
 
 gem "yabeda", "~> 0.16.0"
