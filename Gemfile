@@ -68,7 +68,7 @@ group :development, :test do
 end
 
 group :test do
-  gem "shoulda-matchers", "~> 6.4"
+  gem "shoulda-matchers", "~> 8.0"
   gem "prop_check", "~> 1.0"
   gem "simplecov", "~> 0.22", require: false
 end
