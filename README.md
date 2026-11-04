@@ -24,22 +24,7 @@ Scenario A of the Keyloop brief: the scheduling core of a dealership service sys
 
 ## Quick start
 
-With Docker (API on `http://localhost:3000`):
-
-```sh
-cp .env.example .env
-docker compose up --build
-```
-
-The default run auto-loads `docker-compose.override.yml`: the `web` container runs in development against `scheduler_api_development`, runs `db:prepare db:seed` on start and serves on host port 3000. `.env` is optional. For the production-like stack, see [Docker](#docker).
-
-Check it is up:
-
-```sh
-curl -fsS localhost:3000/health/ready
-```
-
-## Local development
+Locally, with Ruby and PostgreSQL 16 (API on `http://localhost:3000`). This is the path verified by a clean-clone run:
 
 ```sh
 bundle install
@@ -49,6 +34,21 @@ bin/dev
 ```
 
 `bin/setup` installs dependencies and prepares the database, then starts the server unless `--skip-server` is given; `bin/dev` starts the server on `http://localhost:3000`. To prepare and seed manually, run `bin/rails db:prepare db:seed`. To restore the seed data to a known state (the cURL examples below assume this), run `bin/rails db:seed:replant`.
+
+Check it is up:
+
+```sh
+curl -fsS localhost:3000/health/ready
+```
+
+## Docker quick start
+
+```sh
+cp .env.example .env
+docker compose up --build
+```
+
+The default run auto-loads `docker-compose.override.yml`: the `web` container runs in development against `scheduler_api_development`, runs `db:prepare db:seed` on start and serves on host port 3000. `.env` is optional. The CI `docker` job builds the image, but the compose stack was not run on the authoring machine (see [Docker](#docker)).
 
 To use another port, run `bin/rails server -p 3055` (add `-P <pidfile>` if another server already uses `tmp/pids/server.pid`).
 
@@ -93,7 +93,7 @@ Errors use `{ error: { code, status, title, detail, ... } }`. Codes are listed i
 
 ## cURL examples
 
-These run in order against a freshly seeded server (`bin/rails db:seed:replant`) at `http://localhost:3000`, using the seeded Manhattan Auto Care IDs and Monday `2030-01-07`. Output below is real and trimmed with `...`. The booking in step 4 takes the only lift bay (Bay L1) and the only Lift Certified technician (Dan Dalton), so the rival booking in step 5 conflicts.
+These run in order against a freshly seeded server (`bin/rails db:seed:replant`) at `http://localhost:3000`, using the seeded Saigon Auto Care IDs and Monday `2030-01-07` (Ho Chi Minh City, UTC+7, so 10:00 local is `03:00Z`). Output below is real and trimmed with `...`. The booking in step 3 takes the only lift bay (Bay L1) and the only Lift Certified technician (Pham Minh Duc), so the rival booking in step 4 conflicts.
 
 ```sh
 export BASE=http://localhost:3000
@@ -109,7 +109,7 @@ curl -s -w '\nHTTP %{http_code}\n' $BASE/api/v1/service-types
 ```
 
 ```json
-{"success":true,"data":[{"id":"00000020-0000-4000-8000-000000000001","name":"Londinium Motors","time_zone":"Europe/London","opening_hours":[...]},{"id":"00000020-0000-4000-8000-000000000002","name":"Manhattan Auto Care","time_zone":"America/New_York","opening_hours":[{"day_of_week":1,"opens_at":"08:00","closes_at":"17:00"},...]}],"error":null,"message":null,"meta":{"page":1,"per_page":25,"total_pages":1,"total_count":2}}
+{"success":true,"data":[{"id":"00000020-0000-4000-8000-000000000001","name":"Hoan Kiem Motors","time_zone":"Asia/Ho_Chi_Minh","opening_hours":[...]},{"id":"00000020-0000-4000-8000-000000000002","name":"Saigon Auto Care","time_zone":"Asia/Ho_Chi_Minh","opening_hours":[{"day_of_week":1,"opens_at":"08:00","closes_at":"17:00"},...,{"day_of_week":6,"opens_at":"08:00","closes_at":"17:00"}]}],"error":null,"message":null,"meta":{"page":1,"per_page":25,"total_pages":1,"total_count":2}}
 HTTP 200
 {"success":true,"data":[{"id":"00000050-0000-4000-8000-000000000002","name":"Full Service","description":"Comprehensive inspection and maintenance on a lift","duration_minutes":120},{"id":"00000050-0000-4000-8000-000000000001","name":"Oil Change",...},{"id":"00000050-0000-4000-8000-000000000003","name":"Wheel Alignment",...}],"error":null,"message":null,"meta":{"page":1,"per_page":25,"total_pages":1,"total_count":3}}
 HTTP 200
@@ -122,7 +122,7 @@ curl -s -w '\nHTTP %{http_code}\n' "$BASE/api/v1/availability?dealership_id=$DEA
 ```
 
 ```json
-{"success":true,"data":{"dealership_id":"00000020-0000-4000-8000-000000000002","service_type_id":"00000050-0000-4000-8000-000000000002","date":"2030-01-07","time_zone":"America/New_York","slots":[{"start_at":"2030-01-07T14:00:00Z","local_start_at":"2030-01-07T09:00:00-05:00"},{"start_at":"2030-01-07T14:15:00Z","local_start_at":"2030-01-07T09:15:00-05:00"},...,{"start_at":"2030-01-07T20:00:00Z","local_start_at":"2030-01-07T15:00:00-05:00"}]},"error":null,"message":null}
+{"success":true,"data":{"dealership_id":"00000020-0000-4000-8000-000000000002","service_type_id":"00000050-0000-4000-8000-000000000002","date":"2030-01-07","time_zone":"Asia/Ho_Chi_Minh","slots":[{"start_at":"2030-01-07T02:00:00Z","local_start_at":"2030-01-07T09:00:00+07:00"},{"start_at":"2030-01-07T02:15:00Z","local_start_at":"2030-01-07T09:15:00+07:00"},...,{"start_at":"2030-01-07T08:00:00Z","local_start_at":"2030-01-07T15:00:00+07:00"}]},"error":null,"message":null}
 HTTP 200
 ```
 
@@ -131,11 +131,11 @@ HTTP 200
 ```sh
 curl -s -w '\nHTTP %{http_code}\n' -X POST $BASE/api/v1/appointments \
   -H 'Content-Type: application/json' -H 'Idempotency-Key: readme-demo-1' \
-  -d '{"customer_id":"00000070-0000-4000-8000-000000000003","vehicle_id":"00000071-0000-4000-8000-000000000003","service_type_id":"'$FULL_SERVICE'","dealership_id":"'$DEALERSHIP'","start_at":"2030-01-07T15:00:00Z"}'
+  -d '{"customer_id":"00000070-0000-4000-8000-000000000003","vehicle_id":"00000071-0000-4000-8000-000000000003","service_type_id":"'$FULL_SERVICE'","dealership_id":"'$DEALERSHIP'","start_at":"2030-01-07T03:00:00Z"}'
 ```
 
 ```json
-{"success":true,"data":{"id":"8e1ffd30-009b-4c68-8c09-310fc3d9447a","status":"confirmed","customer_id":"00000070-0000-4000-8000-000000000003","vehicle_id":"00000071-0000-4000-8000-000000000003","service_type_id":"00000050-0000-4000-8000-000000000002","dealership_id":"00000020-0000-4000-8000-000000000002","technician_id":"00000060-0000-4000-8000-000000000004","service_bay_id":"00000040-0000-4000-8000-000000000007","start_at":"2030-01-07T15:00:00Z","end_at":"2030-01-07T17:00:00Z","time_zone":"America/New_York","local_start_at":"2030-01-07T10:00:00-05:00","local_end_at":"2030-01-07T12:00:00-05:00","lock_version":0,...,"technician":{"id":"00000060-0000-4000-8000-000000000004","display_name":"Dan Dalton"},"service_bay":{"id":"00000040-0000-4000-8000-000000000007","label":"Bay L1"}},"error":null,"message":null}
+{"success":true,"data":{"id":"52b175f8-51b6-437a-bfb7-4b103b76d9dd","status":"confirmed","customer_id":"00000070-0000-4000-8000-000000000003","vehicle_id":"00000071-0000-4000-8000-000000000003","service_type_id":"00000050-0000-4000-8000-000000000002","dealership_id":"00000020-0000-4000-8000-000000000002","technician_id":"00000060-0000-4000-8000-000000000004","service_bay_id":"00000040-0000-4000-8000-000000000007","start_at":"2030-01-07T03:00:00Z","end_at":"2030-01-07T05:00:00Z","time_zone":"Asia/Ho_Chi_Minh","local_start_at":"2030-01-07T10:00:00+07:00","local_end_at":"2030-01-07T12:00:00+07:00","lock_version":0,...,"technician":{"id":"00000060-0000-4000-8000-000000000004","display_name":"Pham Minh Duc"},"service_bay":{"id":"00000040-0000-4000-8000-000000000007","label":"Bay L1"}},"error":null,"message":null}
 HTTP 201
 ```
 
@@ -152,11 +152,11 @@ A different customer and vehicle ask for the same slot with a new key.
 ```sh
 curl -s -w '\nHTTP %{http_code}\n' -X POST $BASE/api/v1/appointments \
   -H 'Content-Type: application/json' -H 'Idempotency-Key: readme-demo-2' \
-  -d '{"customer_id":"00000070-0000-4000-8000-000000000001","vehicle_id":"00000071-0000-4000-8000-000000000001","service_type_id":"'$FULL_SERVICE'","dealership_id":"'$DEALERSHIP'","start_at":"2030-01-07T15:00:00Z"}'
+  -d '{"customer_id":"00000070-0000-4000-8000-000000000001","vehicle_id":"00000071-0000-4000-8000-000000000001","service_type_id":"'$FULL_SERVICE'","dealership_id":"'$DEALERSHIP'","start_at":"2030-01-07T03:00:00Z"}'
 ```
 
 ```json
-{"success":false,"data":null,"error":{"type":"https://httpstatuses.com/409","title":"No capacity available","status":409,"code":"NO_CAPACITY","detail":"No service bay or technician is available","starts_at":"2030-01-07T15:00:00Z","ends_at":"2030-01-07T17:00:00Z","alternatives":["2030-01-07T17:00:00Z","2030-01-07T17:15:00Z","2030-01-07T17:30:00Z"]},"message":"No service bay or technician is available"}
+{"success":false,"data":null,"error":{"type":"https://httpstatuses.com/409","title":"No capacity available","status":409,"code":"NO_CAPACITY","detail":"No service bay or technician is available","starts_at":"2030-01-07T03:00:00Z","ends_at":"2030-01-07T05:00:00Z","alternatives":["2030-01-07T05:00:00Z","2030-01-07T05:15:00Z","2030-01-07T05:30:00Z"]},"message":"No service bay or technician is available"}
 HTTP 409
 ```
 
@@ -169,11 +169,11 @@ Repeat step 3 with the same `Idempotency-Key` and body. The stored response is r
 ```sh
 curl -s -w '\nHTTP %{http_code}\n' -X POST $BASE/api/v1/appointments \
   -H 'Content-Type: application/json' -H 'Idempotency-Key: readme-demo-1' \
-  -d '{"customer_id":"00000070-0000-4000-8000-000000000003","vehicle_id":"00000071-0000-4000-8000-000000000003","service_type_id":"'$FULL_SERVICE'","dealership_id":"'$DEALERSHIP'","start_at":"2030-01-07T15:00:00Z"}'
+  -d '{"customer_id":"00000070-0000-4000-8000-000000000003","vehicle_id":"00000071-0000-4000-8000-000000000003","service_type_id":"'$FULL_SERVICE'","dealership_id":"'$DEALERSHIP'","start_at":"2030-01-07T03:00:00Z"}'
 ```
 
 ```json
-{"success":true,"data":{"id":"8e1ffd30-009b-4c68-8c09-310fc3d9447a","status":"confirmed",...},"error":null,"message":null}
+{"success":true,"data":{"id":"52b175f8-51b6-437a-bfb7-4b103b76d9dd","status":"confirmed",...},"error":null,"message":null}
 HTTP 201
 ```
 
@@ -185,11 +185,11 @@ The same key with a different body returns `422` `IDEMPOTENCY_KEY_REUSED`.
 
 ```sh
 curl -s -w '\nHTTP %{http_code}\n' -X POST $BASE/api/v1/appointments/$APPOINTMENT_ID/reschedule \
-  -H 'Content-Type: application/json' -d '{"new_start_at":"2030-01-07T18:00:00Z","lock_version":0}'
+  -H 'Content-Type: application/json' -d '{"new_start_at":"2030-01-07T06:00:00Z","lock_version":0}'
 ```
 
 ```json
-{"success":true,"data":{"id":"8e1ffd30-009b-4c68-8c09-310fc3d9447a","status":"confirmed",...,"start_at":"2030-01-07T18:00:00Z","end_at":"2030-01-07T20:00:00Z",...},"error":null,"message":null}
+{"success":true,"data":{"id":"52b175f8-51b6-437a-bfb7-4b103b76d9dd","status":"confirmed",...,"start_at":"2030-01-07T06:00:00Z","end_at":"2030-01-07T08:00:00Z",...},"error":null,"message":null}
 HTTP 200
 ```
 
@@ -201,7 +201,7 @@ curl -s -w '\nHTTP %{http_code}\n' -X POST $BASE/api/v1/appointments/$APPOINTMEN
 ```
 
 ```json
-{"success":true,"data":{"id":"8e1ffd30-009b-4c68-8c09-310fc3d9447a","status":"cancelled",...},"error":null,"message":null}
+{"success":true,"data":{"id":"52b175f8-51b6-437a-bfb7-4b103b76d9dd","status":"cancelled",...},"error":null,"message":null}
 HTTP 200
 ```
 
@@ -220,7 +220,7 @@ curl -s -w '\nHTTP %{http_code}\n' -X POST $BASE/api/v1/appointments -H 'Content
 HTTP 400
 ```
 
-A well-formed request that breaks a scheduling rule is a `422`, for example `"start_at":"2030-01-07T15:10:00Z"`:
+A well-formed request that breaks a scheduling rule is a `422`, for example `"start_at":"2030-01-07T03:10:00Z"`:
 
 ```json
 {"success":false,"data":null,"error":{"type":"https://httpstatuses.com/422","title":"Start time is not on the slot grid","status":422,"code":"START_TIME_NOT_ON_SLOT_GRID","detail":"Start time must be on a 15-minute boundary"},"message":"Start time must be on a 15-minute boundary"}
@@ -239,7 +239,7 @@ make api-check BASE_URL=http://localhost:3061
 
 `BASE_URL` is optional and overrides the environment's `baseUrl`; without it the collection targets `http://localhost:3000`.
 
-`POSTMAN` defaults to `postman` on `PATH`. The collection computes a free Monday at least 7 days ahead, then lists dealerships and service types, checks availability, books (201), books the same slot with the rival vehicle (409 with a `NO_*` code), retries with the same key (201, same id), reschedules (200) and cancels (200). It uses a new `Idempotency-Key` per run and cancels its own booking, so it passes when run repeatedly. It is a local and demo check, not a CI job.
+`POSTMAN` defaults to `postman` on `PATH`. The collection computes a free Monday at least 7 days ahead and follows the three Scenario A requirements at Saigon Auto Care, where Full Service has one lift bay and one lift-certified technician. It lists dealerships and the dealership's service types, checks availability, books (201) and retries with the same key (201, same id). It then books the same slot with the rival vehicle (409 with a `NO_*` code and alternatives), a slot overlapping the last hour (409), the slot starting exactly at the first booking's end (201, half-open interval) and a slot before the technician's shift starts (409 `NO_TECHNICIAN`). Finally it reads the appointment and the dealership schedule, reschedules (200), retries the reschedule with a stale `lock_version` (409 `CONCURRENT_MODIFICATION`) and cancels both bookings (200). It uses a new `Idempotency-Key` per run and cancels its own bookings, so it passes when run repeatedly. It is a local and demo check, not a CI job.
 
 ## Demo
 
@@ -288,32 +288,32 @@ Seeds in `db/seeds/` are idempotent and use deterministic UUIDs from `SeedSuppor
 
 | Entity | ID | Name |
 |---|---|---|
-| Dealership 1 | `00000020-0000-4000-8000-000000000001` | Londinium Motors (`Europe/London`) |
-| Dealership 2 | `00000020-0000-4000-8000-000000000002` | Manhattan Auto Care (`America/New_York`) |
+| Dealership 1 | `00000020-0000-4000-8000-000000000001` | Hoan Kiem Motors, Hanoi (`Asia/Ho_Chi_Minh`) |
+| Dealership 2 | `00000020-0000-4000-8000-000000000002` | Saigon Auto Care, Ho Chi Minh City (`Asia/Ho_Chi_Minh`) |
 | Service type 1 | `00000050-0000-4000-8000-000000000001` | Oil Change (30 min, general bay) |
 | Service type 2 | `00000050-0000-4000-8000-000000000002` | Full Service (120 min, lift bay) |
 | Service type 3 | `00000050-0000-4000-8000-000000000003` | Wheel Alignment (60 min, alignment bay) |
-| Customer 1 / vehicle 1 | `00000070-0000-4000-8000-000000000001` / `00000071-0000-4000-8000-000000000001` | Grace Hopper, Honda Accord |
-| Customer 2 / vehicle 2 | `00000070-0000-4000-8000-000000000002` / `00000071-0000-4000-8000-000000000002` | Alan Turing, Volkswagen Golf |
-| Customer 3 / vehicle 3 | `00000070-0000-4000-8000-000000000003` / `00000071-0000-4000-8000-000000000003` | Katherine Johnson, Ford F-150 |
-| Bay 1 | `00000040-0000-4000-8000-000000000001` | Londinium Bay G1 (general) |
-| Bay 2 | `00000040-0000-4000-8000-000000000002` | Londinium Bay L1 (lift) |
-| Bay 3 | `00000040-0000-4000-8000-000000000003` | Londinium Bay L2 (lift) |
-| Bay 4 | `00000040-0000-4000-8000-000000000004` | Londinium Bay A1 (alignment) |
-| Bay 5 | `00000040-0000-4000-8000-000000000005` | Manhattan Bay G1 (general) |
-| Bay 6 | `00000040-0000-4000-8000-000000000006` | Manhattan Bay G2 (general) |
-| Bay 7 | `00000040-0000-4000-8000-000000000007` | Manhattan Bay L1 (lift) |
-| Bay 8 | `00000040-0000-4000-8000-000000000008` | Manhattan Bay A1 (alignment) |
-| Technician 1 | `00000060-0000-4000-8000-000000000001` | Alice Archer (Londinium; general, lift) |
-| Technician 2 | `00000060-0000-4000-8000-000000000002` | Bob Brewer (Londinium; general, alignment) |
-| Technician 3 | `00000060-0000-4000-8000-000000000003` | Carol Chandler (Londinium; general) |
-| Technician 4 | `00000060-0000-4000-8000-000000000004` | Dan Dalton (Manhattan; general, lift, alignment) |
-| Technician 5 | `00000060-0000-4000-8000-000000000005` | Erin Eastwood (Manhattan; general) |
-| Technician 6 | `00000060-0000-4000-8000-000000000006` | Frank Fowler (Manhattan; general, alignment) |
+| Customer 1 / vehicle 1 | `00000070-0000-4000-8000-000000000001` / `00000071-0000-4000-8000-000000000001` | Nguyen Thi Lan, VinFast VF 8 (`30K-123.45`) |
+| Customer 2 / vehicle 2 | `00000070-0000-4000-8000-000000000002` / `00000071-0000-4000-8000-000000000002` | Tran Minh Quan, Toyota Vios (`29A-456.78`) |
+| Customer 3 / vehicle 3 | `00000070-0000-4000-8000-000000000003` / `00000071-0000-4000-8000-000000000003` | Le Hoang Anh, Ford Ranger (`51G-789.01`) |
+| Bay 1 | `00000040-0000-4000-8000-000000000001` | Hoan Kiem Bay G1 (general) |
+| Bay 2 | `00000040-0000-4000-8000-000000000002` | Hoan Kiem Bay L1 (lift) |
+| Bay 3 | `00000040-0000-4000-8000-000000000003` | Hoan Kiem Bay L2 (lift) |
+| Bay 4 | `00000040-0000-4000-8000-000000000004` | Hoan Kiem Bay A1 (alignment) |
+| Bay 5 | `00000040-0000-4000-8000-000000000005` | Saigon Bay G1 (general) |
+| Bay 6 | `00000040-0000-4000-8000-000000000006` | Saigon Bay G2 (general) |
+| Bay 7 | `00000040-0000-4000-8000-000000000007` | Saigon Bay L1 (lift) |
+| Bay 8 | `00000040-0000-4000-8000-000000000008` | Saigon Bay A1 (alignment) |
+| Technician 1 | `00000060-0000-4000-8000-000000000001` | Nguyen Van An (Hoan Kiem; general, lift) |
+| Technician 2 | `00000060-0000-4000-8000-000000000002` | Tran Thi Bich (Hoan Kiem; general, alignment) |
+| Technician 3 | `00000060-0000-4000-8000-000000000003` | Le Van Cuong (Hoan Kiem; general) |
+| Technician 4 | `00000060-0000-4000-8000-000000000004` | Pham Minh Duc (Saigon; general, lift, alignment) |
+| Technician 5 | `00000060-0000-4000-8000-000000000005` | Hoang Thi Hoa (Saigon; general) |
+| Technician 6 | `00000060-0000-4000-8000-000000000006` | Vo Quoc Huy (Saigon; general, alignment) |
 
-Qualifications use namespace `0x10` (`00000010-0000-4000-8000-00000000000N`: 1 General Service, 2 Lift Certified, 3 Alignment Certified). Technicians work Monday to Friday, odd-numbered ones 08:00-16:00 and even-numbered ones 09:00-17:00, in the dealership's local time. Both dealerships open Monday to Friday 08:00-17:00.
+Qualifications use namespace `0x10` (`00000010-0000-4000-8000-00000000000N`: 1 General Service, 2 Lift Certified, 3 Alignment Certified). Technicians work Monday to Saturday, odd-numbered ones 08:00-16:00 and even-numbered ones 09:00-17:00, in the dealership's local time. Both dealerships open Monday to Saturday 08:00-17:00 in `Asia/Ho_Chi_Minh` (UTC+7, no daylight saving) and close on a national holiday: Hoan Kiem Motors on National Day (2027-09-02), Saigon Auto Care on Reunification Day (2027-04-30).
 
-Single-lift-bay scenario: Manhattan Auto Care has exactly one lift bay (Bay L1) and one Lift Certified technician (Dan Dalton), so two overlapping Full Service bookings there exercise the double-booking conflict. Londinium Motors offers all three service types; Manhattan Auto Care offers Oil Change and Full Service only (`db/seeds/08_dealership_service_types.rb`).
+Single-lift-bay scenario: Saigon Auto Care has exactly one lift bay (Bay L1) and one Lift Certified technician (Pham Minh Duc), so two overlapping Full Service bookings there exercise the double-booking conflict. Hoan Kiem Motors offers all three service types; Saigon Auto Care offers Oil Change and Full Service only (`db/seeds/08_dealership_service_types.rb`).
 
 ## Assumptions
 
@@ -426,6 +426,21 @@ Claude Code works from a written plan per epic (`epics/`), one feature branch pe
 
 Tasks are given as small, bounded items with explicit contracts (class names, signatures, response shapes), the files each agent may touch, and acceptance criteria written as given/when/then checks. Review is a separate pass: findings are numbered (F1, F2, ...), tagged with the rule they break, and fixed by an agent that reads that rule first. The prompts forbid comments, debug output and unrequested changes, so diffs stay surgical.
 
+An implementer task as it was handed over in the Epic 2 plan (shortened; the plans are kept locally in `.claude/plans/`):
+
+```text
+Contract: Scheduling::AssignmentStrategies::LeastLoaded
+  #choose(bays:, technicians:, interval:, loads: {}) -> Assignment | nil
+  bays/technicians are Arrays of id Strings; bay = bays.min
+T4 owns: app/domain/scheduling/assignment.rb,
+         app/domain/scheduling/assignment_strategies/least_loaded.rb, its spec
+AC5 Given bays ["b2", "b1"], technicians ["t2", "t1", "t3"],
+        loads {"t1" => 2, "t2" => 1, "t3" => 1}
+    When choose is called 10 times with the same input
+    Then every result is Assignment(bay_id: "b1", technician_id: "t2");
+         with empty loads the technician is "t1"; with no bays or no technicians it is nil
+```
+
 ### Verification process
 
 Nothing is accepted on the AI's word. Each change has to pass `.claude/scripts/verify.sh` (Zeitwerk, RuboCop, Brakeman, RSpec), and the claims that matter get a negative probe that makes the check fail on purpose. Concurrency claims are tested with real threads released by a barrier, against PostgreSQL, over the service and over HTTP. Documentation claims are checked against `config/routes.rb`, `app/errors/error_catalogue.rb`, `.env.example` and the generated OpenAPI file, and the cURL examples above were run and pasted.
@@ -460,10 +475,10 @@ Detail and evidence for these and six more are in [`docs/ai-log.md`](docs/ai-log
    - Detection: convention review found `allow_any_instance_of(Appointment).to receive(:save!)`, which stubs persistence instead of exercising it.
    - Fix: the failure is injected through a real collaborator, so the rollback runs against the real database.
    - Evidence: commit `bae32d9` (#12); `spec/services/appointments/book_atomicity_spec.rb`.
-5. **`docker compose up` failed on a fresh clone.**
-   - Detection: review of `docker-compose.yml` found `env_file: .env` fails when `.env` is absent, and a production boot needs `SECRET_KEY_BASE` and `CORS_ORIGINS`, which were not set.
-   - Fix: the `env_file` became optional and the missing variables were set under `environment:`.
-   - Evidence: `docker-compose.yml`; foundation squash commit `f6ba77a`.
+5. **The server could not boot while the gate was green.**
+   - Detection: the Epic 6 commit added `plugin :yabeda` to `config/puma.rb`, which raises "Puma control app is not activated" at boot, so `bin/dev` failed. Zeitwerk, RuboCop, Brakeman and RSpec all passed because none of them starts Puma. It surfaced when the Postman harness needed a running server.
+   - Fix: the plugin and the control app load only when `METRICS_ENABLED=true`, verified by booting with metrics off and on; CI now has a "Boot smoke" step that does the same.
+   - Evidence: commit `16eb96a` (#14); `config/puma.rb`; `.github/workflows/ci.yml`. Lesson: a gate that never starts the server cannot catch a boot failure.
 
 Not every suggestion was right. A review proposed removing `Appointment.build_confirmed` as a one-line wrapper. It was declined because the method is part of the epic's contract and is covered by specs (`app/models/appointment.rb`, `spec/models/appointment_spec.rb`).
 

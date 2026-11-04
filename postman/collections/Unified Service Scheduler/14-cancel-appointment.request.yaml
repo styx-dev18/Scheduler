@@ -2,7 +2,7 @@ $kind: http-request
 name: Cancel appointment
 method: POST
 url: '{{baseUrl}}/api/v1/appointments/{{appointmentId}}/cancel'
-order: 8000
+order: 14000
 headers:
   - key: Content-Type
     value: application/json

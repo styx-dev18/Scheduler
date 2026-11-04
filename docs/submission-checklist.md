@@ -25,7 +25,7 @@ Status values: Done means the evidence exists in the repository and can be re-ru
 | Brief item | Status | Evidence (file / spec / command) |
 |---|---|---|
 | Unit, integration and concurrency specs validate the core business logic | Done | `bundle exec rspec` |
-| A fresh clone can be built, run and tested by following the README | Done (local path); Docker compose path pending (needs Docker) | `README.md` sections "Quick start" and "Running tests"; clean-clone steps below; Clean-clone run on the local path passed: `bin/setup --skip-server`, seeds, server boot, Postman 16/16, `CI=true bundle exec rspec` 572/0 with thresholds |
+| A fresh clone can be built, run and tested by following the README | Done (local path); Docker compose path pending (needs Docker) | `README.md` sections "Quick start" and "Running tests"; clean-clone steps below; Clean-clone run on the local path passed: `bin/setup --skip-server`, seeds, server boot, Postman 15 requests, 31/31 assertions, `CI=true bundle exec rspec` 572/0 with thresholds |
 | README contains a dedicated AI Collaboration Narrative | Done | README section "AI Collaboration Narrative" |
 | System Design Document includes every item required by the brief | Done | `docs/system-design.md` table of contents |
 | 5-10 minute video covers all required topics | Pending (user records it) | `docs/video-script.md` (five segments, target about 8:30-9:00) |
@@ -37,7 +37,7 @@ Status values: Done means the evidence exists in the repository and can be re-ru
 | US2: Race spec stable across repeated runs | Done | `RACE_ITERATIONS=50 COVERAGE=false bundle exec rspec spec/concurrency`; `spec/concurrency/book_overlap_spec.rb`; `spec/concurrency/http_booking_race_spec.rb` |
 | US2: Test database setup needs no manual steps | Done | `bin/rails db:test:prepare`; job `test` in `.github/workflows/ci.yml` |
 | US2: Booking error codes covered over HTTP | Done | `spec/requests/api/v1/appointments_spec.rb` |
-| US3: Fresh clone reaches a working API using only the README | Done (local path); Docker pending | `README.md` sections "Quick start", "Local development"; `.env.example`; clean-clone run (local path) |
+| US3: Fresh clone reaches a working API using only the README | Done (local path); Docker pending | `README.md` sections "Quick start", "Docker quick start"; `.env.example`; clean-clone run (local path) |
 | US3: All cURL examples run against the seeded stack with the documented output | Done | README section "cURL examples"; `bin/rails db:seed:replant` |
 | US3: Client-side harness passes | Done | `make api-check`; `postman/` |
 | US4: At least three concrete examples of corrected AI output, with evidence | Done | README section "AI Collaboration Narrative"; `docs/ai-log.md` (ten cases with commits and paths) |
@@ -68,7 +68,7 @@ Status values: Done means the evidence exists in the repository and can be re-ru
 | Run the demo | Done (local path, verified) | `bin/demo` |
 | Open the API documentation | Done (local path, verified) | `DOCS_ENABLED=true bin/dev`, then `/api-docs`; README section "API documentation" |
 
-Evidence: Clean-clone run on the local path passed: `bin/setup --skip-server`, seeds, server boot, Postman 16/16, `CI=true bundle exec rspec` 572/0 with thresholds. The `docker compose up --build` path was not run because Docker is not installed on the verifying machine.
+Evidence: Clean-clone run on the local path passed: `bin/setup --skip-server`, seeds, server boot, Postman 15 requests, 31/31 assertions, `CI=true bundle exec rspec` 572/0 with thresholds. The `docker compose up --build` path was not run because Docker is not installed on the verifying machine.
 
 ## Pending user actions
 

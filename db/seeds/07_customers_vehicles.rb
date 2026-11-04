@@ -1,7 +1,7 @@
 [
-  [ 1, "Grace Hopper", "grace.hopper@example.com", "+44 20 7946 0001", "1HGCM82633A000001", "Honda", "Accord", 2019, "GH19 ACC" ],
-  [ 2, "Alan Turing", "alan.turing@example.com", "+44 20 7946 0002", "WVWZZZ1JZ3W000002", "Volkswagen", "Golf", 2021, "AT21 VWG" ],
-  [ 3, "Katherine Johnson", "katherine.johnson@example.com", "+1 212 555 0003", "1FTFW1ET5DF000003", "Ford", "F-150", 2020, "KJ-2020" ]
+  [ 1, "Nguyen Thi Lan", "lan.nguyen@example.com", "+84 24 3946 0001", "RLLVF8000P0000001", "VinFast", "VF 8", 2023, "30K-123.45" ],
+  [ 2, "Tran Minh Quan", "quan.tran@example.com", "+84 24 3946 0002", "RL4BT9F30M0000002", "Toyota", "Vios", 2021, "29A-456.78" ],
+  [ 3, "Le Hoang Anh", "anh.le@example.com", "+84 28 3946 0003", "MNCLS4D20L0000003", "Ford", "Ranger", 2020, "51G-789.01" ]
 ].each do |number, name, email, phone, vin, make, model, year, plate|
   customer_id = SeedSupport.uuid(0x70, number)
   SeedSupport.upsert!(Customer, customer_id, name: name, email: email, phone: phone)

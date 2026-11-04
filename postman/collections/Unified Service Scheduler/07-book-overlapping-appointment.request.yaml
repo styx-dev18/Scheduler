@@ -1,13 +1,13 @@
 $kind: http-request
-name: Book conflicting appointment
+name: Book overlapping appointment
 method: POST
 url: '{{baseUrl}}/api/v1/appointments'
-order: 5000
+order: 7000
 headers:
   - key: Content-Type
     value: application/json
   - key: Idempotency-Key
-    value: '{{idempotencyKey}}-rival'
+    value: '{{idempotencyKey}}-overlap'
 body:
   type: json
   content: |-
@@ -16,7 +16,7 @@ body:
       "vehicle_id": "{{rivalVehicleId}}",
       "service_type_id": "{{serviceTypeId}}",
       "dealership_id": "{{dealershipId}}",
-      "start_at": "{{startAt}}"
+      "start_at": "{{overlapAt}}"
     }
 scripts:
   - type: afterResponse

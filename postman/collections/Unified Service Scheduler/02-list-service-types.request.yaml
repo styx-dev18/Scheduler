@@ -1,8 +1,11 @@
 $kind: http-request
 name: List service types
 method: GET
-url: '{{baseUrl}}/api/v1/service-types'
+url: '{{baseUrl}}/api/v1/service-types?dealership_id={{dealershipId}}'
 order: 2000
+queryParams:
+  - key: dealership_id
+    value: '{{dealershipId}}'
 scripts:
   - type: afterResponse
     language: text/javascript

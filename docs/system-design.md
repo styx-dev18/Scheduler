@@ -2,6 +2,8 @@
 
 ## Contents
 - [Scope](#scope)
+- [Requirements traceability](#requirements-traceability)
+- [API surface](#api-surface)
 - [Architecture](#architecture)
 - [Booking data flow](#booking-data-flow)
 - [Technology choices](#technology-choices)
@@ -24,6 +26,16 @@
 
 ## Scope
 Booking a service appointment needs a free service bay and a qualified, on-shift technician for the whole duration. This document records the architecture, the assignment rule, the concurrency model, caching, performance targets and the measurements taken at 1,000,000 appointments.
+
+## Requirements traceability
+| Scenario A requirement | Where it is decided | Specs that prove it |
+|---|---|---|
+| Request an appointment for a vehicle, service type and dealership at a desired time | `BookingRequest` form, `Appointments::Book`, `Appointments::IdempotentBook` | `spec/services/appointments/book_spec.rb`, `spec/requests/api/v1/appointments_spec.rb`, `spec/concurrency/idempotent_booking_spec.rb` |
+| Confirm only when a service bay **and** a qualified technician are free for the entire duration | `Availability::FreeBays`, `Availability::FreeTechnicians`, `Appointments::Placement`, the three GiST exclusion constraints | `spec/queries/availability/free_bays_spec.rb`, `spec/queries/availability/free_technicians_spec.rb`, `spec/services/appointments/placement_spec.rb`, `spec/models/appointment_exclusion_spec.rb`, `spec/concurrency/book_overlap_spec.rb`, `spec/concurrency/http_booking_race_spec.rb` |
+| Persist an Appointment linking customer, vehicle, technician and bay | `Appointment` model, `AppointmentSerializer` | `spec/models/appointment_spec.rb`, `spec/requests/api/v1/appointment_confirmation_spec.rb`, `spec/requests/api/v1/appointment_show_spec.rb` |
+
+## API surface
+REST under `/api/v1` with the envelope `{ success, data, error, message, meta }`: browse dealerships and service types, read availability for a local date, book (with `Idempotency-Key`), show, list, reschedule (with `lock_version`), cancel and change status. The endpoint table is in the README ([API overview](../README.md#api-overview)) and the full contract is the generated [`swagger/v1/openapi.yaml`](../swagger/v1/openapi.yaml), which CI checks for drift.
 
 ## Architecture
 ```mermaid
@@ -55,7 +67,7 @@ flowchart LR
 | Models | Active Record aggregates and persistence; `Appointment` owns its transitions. |
 | PostgreSQL | System of record; GiST exclusion constraints decide double-booking. |
 | Solid Queue / Solid Cache | Database-backed jobs (idempotency-key cleanup) and cache (availability, rate-limit counters). |
-| Observability | lograge JSON logs, Yabeda metrics scraped by Prometheus (Grafana is an optional dashboard, not shipped), optional OpenTelemetry traces to Jaeger. |
+| Observability | lograge JSON logs, Yabeda metrics scraped by Prometheus, an optional Grafana dashboard (`config/observability/grafana-dashboard.json`, provisioned by `docker-compose.observability.yml`), optional OpenTelemetry traces to Jaeger. |
 
 ## Booking data flow
 ```mermaid
@@ -92,7 +104,9 @@ sequenceDiagram
     API-->>C: 201 with appointment
   end
 ```
-A failure rolls back the idempotency claim, so a retry with the same key runs again. A retry with the same key and body after a success replays the stored response; the same key with a different body returns `422 IDEMPOTENCY_KEY_REUSED`, and a key still being processed returns `409 IDEMPOTENCY_KEY_IN_PROGRESS`.
+A failure rolls back the idempotency claim, so a retry with the same key runs again. A retry with the same key and body after a success replays the stored response; the same key with a different body returns `422 IDEMPOTENCY_KEY_REUSED`.
+
+The claim row is inserted inside the booking transaction, so it is never visible to other requests before the response is stored. A concurrent duplicate with the same key therefore waits on the unique index until the first request commits (bounded by `DB_STATEMENT_TIMEOUT_MS`), then replays the stored response; if the first request rolls back, the duplicate claims the key and books. `409 IDEMPOTENCY_KEY_IN_PROGRESS` is the defensive answer for a committed key row that has no stored response.
 
 ## Technology choices
 | Area | Choice | Why |
@@ -140,7 +154,7 @@ The full diagram is in [erd.md](erd.md). In short:
 ## Concurrency
 - Bookings run at the PostgreSQL default `READ COMMITTED` isolation level. Two requests can both see a resource as free, so the availability read is advisory.
 - Three partial GiST exclusion constraints on `confirmed` and `in_progress` appointments are the source of truth: `appointments_no_bay_overlap`, `appointments_no_technician_overlap` and `appointments_no_vehicle_overlap`.
-- `Appointments::Book` runs each attempt in `transaction(requires_new: true)`. An `ActiveRecord::ExclusionViolation` removes the losing bay or technician from the candidates and retries; a vehicle violation returns `VEHICLE_ALREADY_BOOKED`.
+- `Appointments::Placement` (shared by booking and reschedule) runs each attempt in `transaction(requires_new: true)`. An `ActiveRecord::ExclusionViolation` removes the losing bay or technician from the candidates and retries; a vehicle violation returns `VEHICLE_ALREADY_BOOKED`.
 - The retry bound is `MAX_ASSIGNMENT_ATTEMPTS = 3`. Each failed attempt removes one candidate, so when the candidates run out or the bound is reached the result is `NO_CAPACITY` (`409`).
 - The 20-thread race spec books the last slot in parallel and expects exactly one success and 19 `409`s.
 
@@ -281,7 +295,7 @@ flowchart LR
 - Puma and pool: `WEB_CONCURRENCY` processes times `RAILS_MAX_THREADS` threads, with pool size equal to threads per process. Total connections = instances x workers x threads and must stay under PostgreSQL `max_connections`.
 - PgBouncer in transaction pooling mode multiplexes many app connections onto few server connections; prepared statements must be disabled or protocol-level pooling used.
 - Read replicas: `connects_to` with a reading role serves availability queries. Replica lag means a slot may show free that was just taken. This is acceptable because the read is advisory; booking, rescheduling and cancellation always run on the primary, where the exclusion constraint decides.
-- Partitioning: range partition `appointments` by `start_at` monthly once history is large; constraints must include the partition key.
+- Partitioning: range partition `appointments` by `start_at` monthly once history is large. PostgreSQL 16 cannot declare an exclusion constraint on a partitioned parent, so each partition carries its own three constraints. That is only safe if no appointment crosses a partition boundary: boundaries are UTC month starts, and opening hours keep every appointment inside one local business day, so this holds for dealerships whose local opening hours never span UTC midnight (true for the seeded `Asia/Ho_Chi_Minh` dealerships, 01:00Z to 10:00Z). A dealership whose hours do span UTC midnight would need boundaries aligned to its local month, or partitioning by dealership.
 - Solid Cache holds short-lived availability results in the database, so no extra infrastructure; stale entries only cause a failed booking, never a double booking.
 - Rate limiting: Rack::Attack per-IP throttles (general and booking); the counter store must be shared (Solid Cache) across instances. Responses are 429 with `Retry-After`.
 - Idempotency: `Idempotency-Key` with `IDEMPOTENCY_TTL` makes client retries after timeouts safe.

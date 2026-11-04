@@ -1,6 +1,6 @@
 # AI Usage Log
 
-A running log of defects and judgement calls found while working with Claude Code on this repository. Every entry cites evidence that exists in the repository: commits, files and specs. Entries are chronological. Reviewer findings from the local plans (`.claude/plans/`, which is gitignored) are summarised inline so this log stands alone.
+Defects and judgement calls found while working with Claude Code on this repository, compiled from each epic's review rounds and gate runs. Every entry cites evidence that exists in the repository: commits, files and specs. Entries are ordered by the date they were written up, which is not always the date the work was done. Reviewer findings from the local plans (`.claude/plans/`, which is gitignored) are summarised inline so this log stands alone.
 
 ## 2026-10-30 Appointment exclusion constraints were missing from the schema
 

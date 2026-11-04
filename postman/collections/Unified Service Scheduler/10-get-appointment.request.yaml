@@ -1,0 +1,17 @@
+$kind: http-request
+name: Get appointment
+method: GET
+url: '{{baseUrl}}/api/v1/appointments/{{appointmentId}}'
+order: 10000
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('status is 200', () => pm.response.to.have.status(200));
+      pm.test('appointment links customer, vehicle, technician and bay', () => {
+        const data = pm.response.json().data;
+        pm.expect(data.customer.id).to.eql(pm.variables.get('customerId'));
+        pm.expect(data.vehicle.id).to.eql(pm.variables.get('vehicleId'));
+        pm.expect(data.technician.id).to.be.a('string');
+        pm.expect(data.service_bay.id).to.be.a('string');
+      });

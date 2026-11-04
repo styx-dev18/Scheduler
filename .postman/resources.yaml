@@ -1,0 +1,7 @@
+cloudResources:
+  collections:
+    ../postman/collections/Unified Service Scheduler: 31001792-b48ce2c8-faa0-485e-a987-57feb95a3f23
+  environments:
+    ../postman/environments/local.environment.yaml: 31001792-89357595-441f-4c06-90ac-6dd73dd73a47
+workspace:
+  id: 20670c55-546d-413d-8034-b311e0207356

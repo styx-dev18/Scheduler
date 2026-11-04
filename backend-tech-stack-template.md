@@ -1,7 +1,5 @@
 # Taskflow Backend Technical Stack: Ruby on Rails
 
-> **Superseded.** This menu was written for the Taskflow project. The Unified Service Scheduler's selected stack is **Epic 0** in [epics/epic-1-backend-project-foundation.md](epics/epic-1-backend-project-foundation.md), summarised in [epics/README.md](epics/README.md). Where the two differ (for example `pg_trgm`, `ancestry`, `discard` and `positioning` here, against `btree_gist`, dry-monads, Yabeda and OpenTelemetry there), Epic 0 wins. Kept for reference only.
-
 ## Overview
 
 This document specializes the generic Backend Technical Stack Selection Template to **Ruby on Rails**. The language, framework, ORM, and several conventions are fixed by the choice of Rails, so those sections now carry a decision instead of a menu. The remaining sections keep the select-one format, with a **Recommended** default marked in each.

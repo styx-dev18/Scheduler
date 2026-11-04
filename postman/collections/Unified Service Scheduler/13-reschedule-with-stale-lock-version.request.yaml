@@ -1,0 +1,23 @@
+$kind: http-request
+name: Reschedule with stale lock version
+method: POST
+url: '{{baseUrl}}/api/v1/appointments/{{appointmentId}}/reschedule'
+order: 13000
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "new_start_at": "{{startAt}}",
+      "lock_version": {{staleLockVersion}}
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('status is 409', () => pm.response.to.have.status(409));
+      pm.test('error code reports concurrent modification', () => {
+        pm.expect(pm.response.json().error.code).to.eql('CONCURRENT_MODIFICATION');
+      });

@@ -19,6 +19,10 @@ body:
       "start_at": "{{startAt}}"
     }
 scripts:
+  - type: beforeRequest
+    language: text/javascript
+    code: |-
+      pm.collectionVariables.set('idempotencyKey', pm.variables.replaceIn('{{$guid}}'));
   - type: afterResponse
     language: text/javascript
     code: |-

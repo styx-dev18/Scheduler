@@ -1,0 +1,18 @@
+$kind: http-request
+name: List dealership schedule
+method: GET
+url: '{{baseUrl}}/api/v1/dealerships/{{dealershipId}}/appointments?date={{slotDate}}'
+order: 11000
+queryParams:
+  - key: date
+    value: '{{slotDate}}'
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('status is 200', () => pm.response.to.have.status(200));
+      pm.test('schedule contains both booked appointments', () => {
+        const ids = pm.response.json().data.map((a) => a.id);
+        pm.expect(ids).to.include(pm.collectionVariables.get('appointmentId'));
+        pm.expect(ids).to.include(pm.collectionVariables.get('backToBackAppointmentId'));
+      });

@@ -28,3 +28,11 @@ values:
     value: '00000071-0000-4000-8000-000000000001'
     enabled: true
     type: default
+  - key: offShiftCustomerId
+    value: '00000070-0000-4000-8000-000000000002'
+    enabled: true
+    type: default
+  - key: offShiftVehicleId
+    value: '00000071-0000-4000-8000-000000000002'
+    enabled: true
+    type: default
