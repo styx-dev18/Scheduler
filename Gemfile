@@ -38,7 +38,7 @@ gem "rack-attack", "~> 6.7"
 gem "rack-timeout", "~> 0.7"
 
 gem "dry-monads", "~> 1.6"
-gem "alba", "~> 3.0"
+gem "alba", "~> 4.0"
 gem "pagy", "~> 9.0"
 gem "strong_migrations", "~> 2.0"
 gem "rswag-api", "~> 2.16"
